@@ -1,0 +1,42 @@
+# docker-compose.yml
+# Orquestracao local: PostgreSQL + Backend Ktor
+# Uso: docker compose up -d
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: lifeforge-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DATABASE_NAME:-lifeforge}
+      POSTGRES_USER: ${DATABASE_USER:-lifeforge}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:-lifeforge}
+    ports:
+      - "5432:5432"
+    volumes:
+      - lifeforge_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DATABASE_USER:-lifeforge}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: lifeforge-backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      DATABASE_URL: jdbc:postgresql://postgres:5432/${DATABASE_NAME:-lifeforge}
+      DATABASE_USER: ${DATABASE_USER:-lifeforge}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD:-lifeforge}
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production-use-a-long-random-string}
+
+volumes:
+  lifeforge_pg_data:

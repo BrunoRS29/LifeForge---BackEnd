@@ -1,0 +1,19 @@
+.gradle/
+build/
+out/
+.idea/
+*.iml
+*.iws
+*.ipr
+.DS_Store
+
+# Variaveis sensiveis
+.env
+
+# Logs
+*.log
+logs/
+
+# IDEs
+.vscode/
+.fleet/
