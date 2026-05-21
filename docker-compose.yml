@@ -1,5 +1,5 @@
-# docker-compose.yml
-# Orquestracao local: PostgreSQL + Backend Ktor
+# docker-compose.yml (Sprint 5)
+# Orquestracao local: PostgreSQL + Backend Ktor + ML Service Python
 # Uso: docker compose up -d
 
 services:
@@ -21,6 +21,32 @@ services:
       timeout: 5s
       retries: 5
 
+  # ============================================================
+  # ML SERVICE (Sprint 5) — FastAPI + scikit-learn
+  # ============================================================
+  # Roda na mesma rede do compose. O backend resolve via DNS "ml-service".
+  # Nao expomos a porta para o host por padrao (apenas internamente);
+  # descomente o bloco `ports` se quiser bater na Swagger UI direto do PC.
+  ml-service:
+    build:
+      context: ./ml-service
+      dockerfile: Dockerfile
+    container_name: lifeforge-ml-service
+    restart: unless-stopped
+    environment:
+      ML_LOG_LEVEL: ${ML_LOG_LEVEL:-INFO}
+    # ports:
+    #   - "8000:8000"
+    healthcheck:
+      # O Dockerfile do servico ja define HEALTHCHECK proprio,
+      # mas reforcamos aqui para o `depends_on: condition: service_healthy`
+      # do backend funcionar de forma confiavel em qualquer versao do compose.
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health').read()"]
+      interval: 10s
+      timeout: 3s
+      start_period: 15s
+      retries: 3
+
   backend:
     build:
       context: .
@@ -30,6 +56,9 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      # Sprint 5: aguarda o ML estar healthy antes de aceitar trafego.
+      ml-service:
+        condition: service_healthy
     ports:
       - "8080:8080"
     environment:
@@ -37,6 +66,9 @@ services:
       DATABASE_USER: ${DATABASE_USER:-lifeforge}
       DATABASE_PASSWORD: ${DATABASE_PASSWORD:-lifeforge}
       JWT_SECRET: ${JWT_SECRET:-change-me-in-production-use-a-long-random-string}
+      # Sprint 5: aponta o backend para o microsservico ML pelo nome DNS
+      # interno do compose. Pode ser sobrescrito em desenvolvimento local.
+      ML_BASE_URL: ${ML_BASE_URL:-http://ml-service:8000}
 
 volumes:
   lifeforge_pg_data:
