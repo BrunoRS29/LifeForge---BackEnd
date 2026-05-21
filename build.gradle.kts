@@ -76,6 +76,23 @@ dependencies {
     testImplementation("io.kotest:kotest-runner-junit5:$kotestVersion")
     testImplementation("io.kotest:kotest-assertions-core:$kotestVersion")
     testImplementation("com.h2database:h2:2.2.224") // banco em memoria para testes
+
+    // ---------- Ktor Client (Sprint 5) ----------
+    // Cliente HTTP usado pelo MlClient para falar com o microsservico Python.
+    // CIO eh o engine pure-Kotlin assincrono (sem deps nativas).
+    implementation("io.ktor:ktor-client-core-jvm:$ktorVersion")
+    implementation("io.ktor:ktor-client-cio-jvm:$ktorVersion")
+
+    // ContentNegotiation + kotlinx.serialization para JSON
+    implementation("io.ktor:ktor-client-content-negotiation-jvm:$ktorVersion")
+    implementation("io.ktor:ktor-serialization-kotlinx-json-jvm:$ktorVersion")
+
+    // Logging (usado pelo Logging plugin, embora desligado por padrao no MlClient)
+    implementation("io.ktor:ktor-client-logging-jvm:$ktorVersion")
+
+    // ---------- Test ----------
+    // MockEngine para testes do MlClient sem precisar de servidor real
+    testImplementation("io.ktor:ktor-client-mock-jvm:$ktorVersion")
 }
 
 tasks.withType<KotlinCompile> {
