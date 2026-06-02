@@ -33,6 +33,14 @@ enum class AssetType {
     FIXED_INCOME, STOCKS, REAL_ESTATE_FUND, CRYPTO, REAL_ESTATE, OTHER
 }
 
+/**
+ * Tipo de recorrencia de um schedule de receita/despesa.
+ *  - ONE_TIME     : evento unico (comportamento legado)
+ *  - MONTHLY      : repete mensalmente (indefinido ou ate endDate)
+ *  - INSTALLMENTS : numero fixo de parcelas mensais (ex: compra 12x)
+ */
+enum class RecurrenceType { ONE_TIME, MONTHLY, INSTALLMENTS }
+
 data class User(
     val id: Long,
     val email: String,
@@ -62,7 +70,9 @@ data class Income(
     val incomeType: IncomeType,
     val recurring: Boolean,
     val receivedAt: Instant,
-    val createdAt: Instant
+    val createdAt: Instant,
+    // null = lancamento avulso; != null aponta para o IncomeSchedule que o gerou
+    val scheduleId: Long? = null
 )
 
 data class Expense(
@@ -73,6 +83,42 @@ data class Expense(
     val category: ExpenseCategory,
     val recurring: Boolean,
     val spentAt: Instant,
+    val createdAt: Instant,
+    // null = lancamento avulso; != null aponta para o ExpenseSchedule que o gerou
+    val scheduleId: Long? = null
+)
+
+/**
+ * Template recorrente que GERA multiplos [Income] individuais.
+ * O schedule e o "molde"; os Incomes materializados sao o que a IA consome.
+ */
+data class IncomeSchedule(
+    val id: Long,
+    val userId: Long,
+    val source: String,
+    val amountPerOccurrence: BigDecimal,
+    val incomeType: IncomeType,
+    val recurrence: RecurrenceType,
+    val startDate: Instant,
+    val endDate: Instant?,          // null = indefinido (apenas MONTHLY)
+    val installmentsTotal: Int?,    // != null apenas para INSTALLMENTS
+    val createdAt: Instant
+)
+
+/**
+ * Template recorrente que GERA multiplas [Expense] individuais.
+ * Suporta INSTALLMENTS para compras parceladas (ex: 12x no cartao).
+ */
+data class ExpenseSchedule(
+    val id: Long,
+    val userId: Long,
+    val description: String,
+    val amountPerOccurrence: BigDecimal,
+    val category: ExpenseCategory,
+    val recurrence: RecurrenceType,
+    val startDate: Instant,
+    val endDate: Instant?,
+    val installmentsTotal: Int?,
     val createdAt: Instant
 )
 

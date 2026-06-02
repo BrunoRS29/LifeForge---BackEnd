@@ -33,9 +33,16 @@ object DatabaseFactory {
         Database.connect(dataSource)
 
         transaction {
-            SchemaUtils.create(
+            // createMissingTablesAndColumns (em vez de create) para evoluir o schema
+            // sem dropar dados: cria as novas tabelas de schedule E adiciona a coluna
+            // nullable `schedule_id` em incomes/expenses ja existentes. Registros
+            // antigos permanecem validos como lancamentos avulsos (schedule_id NULL).
+            // Tabelas referenciadas vem antes das que as referenciam.
+            SchemaUtils.createMissingTablesAndColumns(
                 Users,
                 Goals,
+                IncomeSchedules,
+                ExpenseSchedules,
                 Incomes,
                 Expenses,
                 Assets,

@@ -1,6 +1,7 @@
 package com.lifeforge.data.tables
 
 import org.jetbrains.exposed.dao.id.LongIdTable
+import org.jetbrains.exposed.sql.ReferenceOption
 import org.jetbrains.exposed.sql.javatime.timestamp
 import org.jetbrains.exposed.sql.json.jsonb
 import kotlinx.serialization.json.Json
@@ -36,6 +37,20 @@ object Goals : LongIdTable("goals") {
     val updatedAt = timestamp("updated_at").clientDefault { Instant.now() }
 }
 
+object IncomeSchedules : LongIdTable("income_schedules") {
+    val userId = reference("user_id", Users).index()
+    val sourceColumn = varchar("source", 200)
+    val amountPerOccurrence = decimal("amount_per_occurrence", precision = 18, scale = 2)
+    // SALARY | BONUS | DIVIDEND | RENT | OTHER
+    val incomeType = varchar("income_type", 32)
+    // ONE_TIME | MONTHLY | INSTALLMENTS
+    val recurrence = varchar("recurrence", 16)
+    val startDate = timestamp("start_date")
+    val endDate = timestamp("end_date").nullable()              // null = indefinido (MONTHLY)
+    val installmentsTotal = integer("installments_total").nullable() // so INSTALLMENTS
+    val createdAt = timestamp("created_at").clientDefault { Instant.now() }
+}
+
 object Incomes : LongIdTable("incomes") {
     val userId = reference("user_id", Users).index()
     val sourceColumn = varchar("source", 200)
@@ -44,6 +59,23 @@ object Incomes : LongIdTable("incomes") {
     val incomeType = varchar("income_type", 32)
     val recurring = bool("recurring").default(false)
     val receivedAt = timestamp("received_at")
+    // null = avulso; aponta para o schedule que materializou este registro.
+    // SET_NULL: apagar um schedule mantendo registros passados os torna avulsos.
+    val scheduleId = optReference("schedule_id", IncomeSchedules, onDelete = ReferenceOption.SET_NULL).index()
+    val createdAt = timestamp("created_at").clientDefault { Instant.now() }
+}
+
+object ExpenseSchedules : LongIdTable("expense_schedules") {
+    val userId = reference("user_id", Users).index()
+    val description = varchar("description", 200)
+    val amountPerOccurrence = decimal("amount_per_occurrence", precision = 18, scale = 2)
+    // HOUSING | FOOD | TRANSPORT | HEALTH | EDUCATION | LEISURE | OTHER
+    val category = varchar("category", 64)
+    // ONE_TIME | MONTHLY | INSTALLMENTS
+    val recurrence = varchar("recurrence", 16)
+    val startDate = timestamp("start_date")
+    val endDate = timestamp("end_date").nullable()
+    val installmentsTotal = integer("installments_total").nullable()
     val createdAt = timestamp("created_at").clientDefault { Instant.now() }
 }
 
@@ -55,6 +87,8 @@ object Expenses : LongIdTable("expenses") {
     val category = varchar("category", 64)
     val recurring = bool("recurring").default(false)
     val spentAt = timestamp("spent_at")
+    // null = avulso; aponta para o schedule que materializou este registro.
+    val scheduleId = optReference("schedule_id", ExpenseSchedules, onDelete = ReferenceOption.SET_NULL).index()
     val createdAt = timestamp("created_at").clientDefault { Instant.now() }
 }
 
