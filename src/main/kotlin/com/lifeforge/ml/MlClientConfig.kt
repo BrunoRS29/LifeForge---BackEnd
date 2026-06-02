@@ -12,7 +12,10 @@ import kotlin.time.Duration.Companion.seconds
  * facil sobrescrever em testes - basta construir uma instancia manualmente
  * sem precisar de um ApplicationConfig real.
  *
- * @param baseUrl URL do microsservico Python (ex.: http://ml-service:8000)
+ * @param baseUrl URL do microsservico Python (ex.: http://ml-service:8000).
+ *                Trailing slashes sao removidos no init para que o
+ *                construtor direto e o factory `fromAppConfig` se
+ *                comportem do mesmo jeito.
  * @param requestTimeout timeout total da request HTTP
  * @param connectTimeout timeout para estabelecer a conexao TCP
  * @param maxRetries quantas tentativas de retry em falhas transitorias
@@ -29,6 +32,13 @@ data class MlClientConfig(
         require(baseUrl.isNotBlank()) { "ML baseUrl nao pode ser vazio" }
         require(maxRetries >= 0) { "maxRetries deve ser >= 0" }
     }
+
+    /**
+     * Versao normalizada do baseUrl - sem trailing slashes.
+     * O MlClient sempre concatena este valor com path relativo ("predict/income"),
+     * entao precisamos garantir uma unica barra de separacao.
+     */
+    val normalizedBaseUrl: String = baseUrl.trimEnd('/')
 
     companion object {
         /**
@@ -50,7 +60,9 @@ data class MlClientConfig(
                 ?.getString()?.toLong() ?: 200L
 
             return MlClientConfig(
-                baseUrl = baseUrl.trimEnd('/'),
+                // Mantemos a normalizacao aqui tambem por simetria, mesmo
+                // sabendo que o init do data class ja faz a sua propria.
+                baseUrl = baseUrl,
                 requestTimeout = requestTimeoutMs.milliseconds,
                 connectTimeout = connectTimeoutMs.milliseconds,
                 maxRetries = maxRetries,

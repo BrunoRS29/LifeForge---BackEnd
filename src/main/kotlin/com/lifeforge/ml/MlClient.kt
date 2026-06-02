@@ -19,6 +19,7 @@ import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
+import io.ktor.serialization.JsonConvertException
 import io.ktor.serialization.kotlinx.json.json
 import java.io.IOException
 import kotlinx.coroutines.delay
@@ -88,7 +89,11 @@ class MlClient(
         }
 
         defaultRequest {
-            url(config.baseUrl + "/")
+            // Usamos normalizedBaseUrl para garantir uma barra unica entre
+            // host e path. Sem isso, baseUrl="http://x///" + "/" geraria
+            // "http://x/////predict/income" (problema visto no teste de
+            // trailing slash, ver MlClientTest).
+            url(config.normalizedBaseUrl + "/")
             headers.append("User-Agent", "lifeforge-backend/0.1")
         }
     }
@@ -219,6 +224,13 @@ class MlClient(
      * - 2xx: desserializa o corpo como Res
      * - 4xx: tenta desserializar como MlErrorResponse e lanca MlValidationError
      * - 5xx: ja foi tratado pelo retry (nao chega aqui normalmente)
+     *
+     * Sobre o catch: o `response.body()` do Ktor com plugin ContentNegotiation
+     * faz a desserializacao automaticamente. Quando o JSON e invalido o Ktor
+     * embrulha a `SerializationException` numa `JsonConvertException` que NAO
+     * eh subclasse de SerializationException. Precisamos pegar as duas
+     * explicitamente para garantir que JSON malformado vire MlInternalError
+     * em vez de vazar para o chamador.
      */
     private suspend inline fun <reified Res> handleResponse(
         response: HttpResponse,
@@ -226,6 +238,11 @@ class MlClient(
         return when (response.status.value) {
             in 200..299 -> try {
                 response.body()
+            } catch (e: JsonConvertException) {
+                throw MlInternalError(
+                    "Resposta do ML em formato inesperado: ${e.message}",
+                    e,
+                )
             } catch (e: SerializationException) {
                 throw MlInternalError(
                     "Resposta do ML em formato inesperado: ${e.message}",
