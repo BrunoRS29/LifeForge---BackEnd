@@ -1,0 +1,23 @@
+# Stack do microsservico ML do LifeForge
+# Fixado nas versoes que rodaram nos testes em outubro/2025.
+
+# Web framework
+fastapi==0.115.6
+uvicorn[standard]==0.32.1
+
+# Configuracao via env
+pydantic==2.10.4
+pydantic-settings==2.7.0
+
+# Machine Learning
+scikit-learn==1.5.2
+numpy>=2.1.0
+pandas==2.2.3
+
+# Logs estruturados
+structlog==24.4.0
+
+# Testes
+pytest==8.3.4
+pytest-asyncio==0.25.1
+httpx==0.28.1  # cliente assincrono para TestClient + chamadas externas
