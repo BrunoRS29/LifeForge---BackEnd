@@ -2,15 +2,19 @@ package com.lifeforge.config
 
 import com.lifeforge.data.repository.AssetRepositoryImpl
 import com.lifeforge.data.repository.ExpenseRepositoryImpl
+import com.lifeforge.data.repository.ExpenseScheduleRepositoryImpl
 import com.lifeforge.data.repository.GoalRepositoryImpl
 import com.lifeforge.data.repository.IncomeRepositoryImpl
+import com.lifeforge.data.repository.IncomeScheduleRepositoryImpl
 import com.lifeforge.data.repository.PredictionRepositoryImpl
 import com.lifeforge.data.repository.SimulationRepositoryImpl
 import com.lifeforge.data.repository.UserRepositoryImpl
 import com.lifeforge.domain.repository.AssetRepository
 import com.lifeforge.domain.repository.ExpenseRepository
+import com.lifeforge.domain.repository.ExpenseScheduleRepository
 import com.lifeforge.domain.repository.GoalRepository
 import com.lifeforge.domain.repository.IncomeRepository
+import com.lifeforge.domain.repository.IncomeScheduleRepository
 import com.lifeforge.domain.repository.PredictionRepository
 import com.lifeforge.domain.repository.SimulationRepository
 import com.lifeforge.domain.repository.UserRepository
@@ -41,6 +45,12 @@ class AppContainer(config: ApplicationConfig) : AutoCloseable {
     val expenseRepository: ExpenseRepository = ExpenseRepositoryImpl()
     val assetRepository: AssetRepository = AssetRepositoryImpl()
     val simulationRepository: SimulationRepository = SimulationRepositoryImpl()
+
+    // ----- Schedules recorrentes (Sprint 6): geram Incomes/Expenses -----
+    val incomeScheduleRepository: IncomeScheduleRepository =
+        IncomeScheduleRepositoryImpl(incomeRepository)
+    val expenseScheduleRepository: ExpenseScheduleRepository =
+        ExpenseScheduleRepositoryImpl(expenseRepository)
 
     // ----- Engines (Sprints 2 e 3) -----
     val monteCarloEngine: MonteCarloEngine = MonteCarloEngine()

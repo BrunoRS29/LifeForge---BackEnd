@@ -4,11 +4,15 @@ import com.lifeforge.domain.model.Asset
 import com.lifeforge.domain.model.AssetType
 import com.lifeforge.domain.model.Expense
 import com.lifeforge.domain.model.ExpenseCategory
+import com.lifeforge.domain.model.ExpenseSchedule
 import com.lifeforge.domain.model.Goal
 import com.lifeforge.domain.model.GoalCategory
 import com.lifeforge.domain.model.Income
+import com.lifeforge.domain.model.IncomeSchedule
 import com.lifeforge.domain.model.IncomeType
+import com.lifeforge.domain.model.RecurrenceType
 import com.lifeforge.domain.model.RiskProfile
+import com.lifeforge.domain.model.ScheduleAffect
 import com.lifeforge.domain.model.User
 import java.math.BigDecimal
 import java.time.Instant
@@ -97,11 +101,21 @@ interface IncomeRepository {
         incomeType: IncomeType,
         recurring: Boolean,
         receivedAt: Instant,
+        scheduleId: Long? = null,
     ): Income
 
     suspend fun findAllByUser(userId: Long): List<Income>
     suspend fun findById(id: Long, userId: Long): Income?
+    suspend fun findByScheduleId(userId: Long, scheduleId: Long): List<Income>
     suspend fun delete(id: Long, userId: Long): Boolean
+
+    /**
+     * Remove registros gerados por um schedule.
+     *  - futureAfter == null -> remove TODOS os vinculados ao schedule
+     *  - futureAfter != null -> remove apenas os com receivedAt > futureAfter
+     * Retorna a quantidade removida.
+     */
+    suspend fun deleteByScheduleId(userId: Long, scheduleId: Long, futureAfter: Instant?): Int
 }
 
 // ============================================================================
@@ -116,11 +130,16 @@ interface ExpenseRepository {
         category: ExpenseCategory,
         recurring: Boolean,
         spentAt: Instant,
+        scheduleId: Long? = null,
     ): Expense
 
     suspend fun findAllByUser(userId: Long): List<Expense>
     suspend fun findById(id: Long, userId: Long): Expense?
+    suspend fun findByScheduleId(userId: Long, scheduleId: Long): List<Expense>
     suspend fun delete(id: Long, userId: Long): Boolean
+
+    /** Ver [IncomeRepository.deleteByScheduleId]: futureAfter==null remove todos. */
+    suspend fun deleteByScheduleId(userId: Long, scheduleId: Long, futureAfter: Instant?): Int
 }
 
 // ============================================================================
@@ -151,4 +170,82 @@ interface AssetRepository {
     ): Asset?
 
     suspend fun delete(id: Long, userId: Long): Boolean
+}
+
+// ============================================================================
+// Income schedules (templates recorrentes que geram Incomes)
+// ============================================================================
+
+interface IncomeScheduleRepository {
+    /** Persiste o schedule e materializa os Incomes correspondentes. */
+    suspend fun createAndMaterialize(
+        userId: Long,
+        source: String,
+        amountPerOccurrence: BigDecimal,
+        incomeType: IncomeType,
+        recurrence: RecurrenceType,
+        startDate: Instant,
+        endDate: Instant?,
+        installmentsTotal: Int?,
+    ): IncomeSchedule
+
+    suspend fun findAllByUser(userId: Long): List<IncomeSchedule>
+    suspend fun findById(id: Long, userId: Long): IncomeSchedule?
+
+    /** Atualiza o schedule e regenera os Incomes (todos ou so futuros). */
+    suspend fun updateAndRematerialize(
+        id: Long,
+        userId: Long,
+        source: String,
+        amountPerOccurrence: BigDecimal,
+        incomeType: IncomeType,
+        recurrence: RecurrenceType,
+        startDate: Instant,
+        endDate: Instant?,
+        installmentsTotal: Int?,
+        affect: ScheduleAffect,
+    ): IncomeSchedule?
+
+    /** Remove o schedule; FUTURE_ONLY mantem registros passados como avulsos. */
+    suspend fun delete(id: Long, userId: Long, affect: ScheduleAffect): Boolean
+
+    /** Gera os Incomes individuais do schedule (opcionalmente so apos `onlyAfter`). */
+    suspend fun materialize(schedule: IncomeSchedule, onlyAfter: Instant? = null): List<Income>
+}
+
+// ============================================================================
+// Expense schedules (templates recorrentes que geram Expenses)
+// ============================================================================
+
+interface ExpenseScheduleRepository {
+    suspend fun createAndMaterialize(
+        userId: Long,
+        description: String,
+        amountPerOccurrence: BigDecimal,
+        category: ExpenseCategory,
+        recurrence: RecurrenceType,
+        startDate: Instant,
+        endDate: Instant?,
+        installmentsTotal: Int?,
+    ): ExpenseSchedule
+
+    suspend fun findAllByUser(userId: Long): List<ExpenseSchedule>
+    suspend fun findById(id: Long, userId: Long): ExpenseSchedule?
+
+    suspend fun updateAndRematerialize(
+        id: Long,
+        userId: Long,
+        description: String,
+        amountPerOccurrence: BigDecimal,
+        category: ExpenseCategory,
+        recurrence: RecurrenceType,
+        startDate: Instant,
+        endDate: Instant?,
+        installmentsTotal: Int?,
+        affect: ScheduleAffect,
+    ): ExpenseSchedule?
+
+    suspend fun delete(id: Long, userId: Long, affect: ScheduleAffect): Boolean
+
+    suspend fun materialize(schedule: ExpenseSchedule, onlyAfter: Instant? = null): List<Expense>
 }

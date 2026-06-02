@@ -41,6 +41,9 @@ enum class AssetType {
  */
 enum class RecurrenceType { ONE_TIME, MONTHLY, INSTALLMENTS }
 
+/** Escopo de uma edicao/remocao de schedule: so registros futuros ou todos. */
+enum class ScheduleAffect { FUTURE_ONLY, ALL }
+
 data class User(
     val id: Long,
     val email: String,

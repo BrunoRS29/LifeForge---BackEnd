@@ -1,6 +1,7 @@
 package com.lifeforge.data.repository
 
 import com.lifeforge.config.DatabaseFactory.dbQuery
+import com.lifeforge.data.tables.ExpenseSchedules
 import com.lifeforge.data.tables.Expenses
 import com.lifeforge.data.tables.Users
 import com.lifeforge.domain.model.Expense
@@ -10,6 +11,7 @@ import org.jetbrains.exposed.dao.id.EntityID
 import org.jetbrains.exposed.sql.ResultRow
 import org.jetbrains.exposed.sql.SortOrder
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.greater
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.deleteWhere
 import org.jetbrains.exposed.sql.insertAndGetId
@@ -25,7 +27,8 @@ class ExpenseRepositoryImpl : ExpenseRepository {
         amount: BigDecimal,
         category: ExpenseCategory,
         recurring: Boolean,
-        spentAt: Instant
+        spentAt: Instant,
+        scheduleId: Long?
     ): Expense = dbQuery {
         val now = Instant.now()
         val id = Expenses.insertAndGetId { row ->
@@ -35,6 +38,7 @@ class ExpenseRepositoryImpl : ExpenseRepository {
             row[Expenses.category] = category.name
             row[Expenses.recurring] = recurring
             row[Expenses.spentAt] = spentAt
+            row[Expenses.scheduleId] = scheduleId?.let { EntityID(it, ExpenseSchedules) }
             row[Expenses.createdAt] = now
         }
         Expense(
@@ -45,7 +49,8 @@ class ExpenseRepositoryImpl : ExpenseRepository {
             category = category,
             recurring = recurring,
             spentAt = spentAt,
-            createdAt = now
+            createdAt = now,
+            scheduleId = scheduleId
         )
     }
 
@@ -67,6 +72,28 @@ class ExpenseRepositoryImpl : ExpenseRepository {
         Expenses.deleteWhere { (Expenses.id eq id) and (Expenses.userId eq userId) } > 0
     }
 
+    override suspend fun findByScheduleId(userId: Long, scheduleId: Long): List<Expense> = dbQuery {
+        Expenses.selectAll()
+            .where {
+                (Expenses.userId eq userId) and
+                    (Expenses.scheduleId eq EntityID(scheduleId, ExpenseSchedules))
+            }
+            .orderBy(Expenses.spentAt to SortOrder.ASC)
+            .map { it.toExpense() }
+    }
+
+    override suspend fun deleteByScheduleId(
+        userId: Long,
+        scheduleId: Long,
+        futureAfter: Instant?
+    ): Int = dbQuery {
+        Expenses.deleteWhere {
+            val base = (Expenses.userId eq userId) and
+                (Expenses.scheduleId eq EntityID(scheduleId, ExpenseSchedules))
+            if (futureAfter == null) base else base and (Expenses.spentAt greater futureAfter)
+        }
+    }
+
     private fun ResultRow.toExpense(): Expense = Expense(
         id = this[Expenses.id].value,
         userId = this[Expenses.userId].value,
@@ -75,6 +102,7 @@ class ExpenseRepositoryImpl : ExpenseRepository {
         category = ExpenseCategory.valueOf(this[Expenses.category]),
         recurring = this[Expenses.recurring],
         spentAt = this[Expenses.spentAt],
-        createdAt = this[Expenses.createdAt]
+        createdAt = this[Expenses.createdAt],
+        scheduleId = this[Expenses.scheduleId]?.value
     )
 }
