@@ -43,20 +43,26 @@ class MlPredictionServiceTest : StringSpec({
         override suspend fun create(
             userId: Long, source: String, amount: java.math.BigDecimal,
             incomeType: IncomeType, recurring: Boolean, receivedAt: Instant,
+            scheduleId: Long?,
         ): Income = throw NotImplementedError()
         override suspend fun findAllByUser(userId: Long): List<Income> = items
         override suspend fun findById(id: Long, userId: Long): Income? = null
+        override suspend fun findByScheduleId(userId: Long, scheduleId: Long): List<Income> = emptyList()
         override suspend fun delete(id: Long, userId: Long): Boolean = false
+        override suspend fun deleteByScheduleId(userId: Long, scheduleId: Long, futureAfter: Instant?): Int = 0
     }
 
     class FakeExpenseRepo(private val items: List<Expense>) : ExpenseRepository {
         override suspend fun create(
             userId: Long, description: String, amount: java.math.BigDecimal,
             category: ExpenseCategory, recurring: Boolean, spentAt: Instant,
+            scheduleId: Long?,
         ): Expense = throw NotImplementedError()
         override suspend fun findAllByUser(userId: Long): List<Expense> = items
         override suspend fun findById(id: Long, userId: Long): Expense? = null
+        override suspend fun findByScheduleId(userId: Long, scheduleId: Long): List<Expense> = emptyList()
         override suspend fun delete(id: Long, userId: Long): Boolean = false
+        override suspend fun deleteByScheduleId(userId: Long, scheduleId: Long, futureAfter: Instant?): Int = 0
     }
 
     class FakePredictionRepo : PredictionRepository {
@@ -199,6 +205,47 @@ class MlPredictionServiceTest : StringSpec({
                 outcome.prediction.errorMetric!!.toDouble() shouldBe 50.0
             }
             predRepo.created.size shouldBe 1
+        }
+    }
+
+    "predictIncomeFor: recebimentos futuros nao contam para o minimo (filtro temporal)" {
+        runTest {
+            var httpCalls = 0
+            val client = mockClient { _ ->
+                httpCalls++
+                respond(incomeOkBody, HttpStatusCode.OK,
+                    headersOf(HttpHeaders.ContentType, "application/json"))
+            }
+            val now = Instant.now()
+            // 5 recebimentos passados + 10 futuros: apenas os 5 passados contam
+            // (< 6) -> deve lancar antes de qualquer chamada HTTP ao ML.
+            val past = List(5) { i ->
+                Income(
+                    id = i + 1L, userId = 1L, source = "salario",
+                    amount = BigDecimal("5000.00"), incomeType = IncomeType.SALARY,
+                    recurring = true, receivedAt = now.minusSeconds(86_400L * 30 * (i + 1)),
+                    createdAt = now,
+                )
+            }
+            val future = List(10) { i ->
+                Income(
+                    id = 100L + i, userId = 1L, source = "salario",
+                    amount = BigDecimal("5000.00"), incomeType = IncomeType.SALARY,
+                    recurring = true, receivedAt = now.plusSeconds(86_400L * 30 * (i + 1)),
+                    createdAt = now,
+                )
+            }
+            val service = MlPredictionService(
+                client, FakeIncomeRepo(past + future),
+                FakeExpenseRepo(emptyList()), FakePredictionRepo(),
+            )
+            client.use {
+                val ex = shouldThrow<MlValidationError> {
+                    service.predictIncomeFor(userId = 1L, horizonMonths = 6)
+                }
+                ex.code shouldBe "INSUFFICIENT_DATA"
+            }
+            httpCalls shouldBe 0
         }
     }
 

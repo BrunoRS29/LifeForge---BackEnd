@@ -9,6 +9,7 @@ import com.lifeforge.domain.repository.PredictionRepository
 import com.lifeforge.engine.montecarlo.MonteCarloParameters
 import java.math.BigDecimal
 import java.math.RoundingMode
+import java.time.Instant
 import java.time.format.DateTimeFormatter
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -58,7 +59,13 @@ class MlPredictionService(
         userId: Long,
         horizonMonths: Int,
     ): PredictionOutcome<IncomePredictionResponseDto> {
+        // Apenas recebimentos passados/atuais alimentam a regressao. Registros
+        // futuros gerados por schedules recorrentes sao para projecao/exibicao,
+        // nao dados de treino - treinar com o futuro seria circular e invalido
+        // academicamente.
+        val now = Instant.now()
         val history = incomeRepository.findAllByUser(userId)
+            .filter { !it.receivedAt.isAfter(now) }
         if (history.size < MIN_INCOME_OBSERVATIONS) {
             throw MlValidationError(
                 code = "INSUFFICIENT_DATA",
@@ -93,7 +100,11 @@ class MlPredictionService(
         userId: Long,
         horizonMonths: Int = 1,
     ): PredictionOutcome<ExpensePredictionResponseDto> {
+        // Mesma regra da renda: gastos futuros (ex: parcelas de uma compra
+        // INSTALLMENTS) nao entram no treino do modelo de despesas.
+        val now = Instant.now()
         val history = expenseRepository.findAllByUser(userId)
+            .filter { !it.spentAt.isAfter(now) }
         if (history.size < MIN_EXPENSE_OBSERVATIONS) {
             throw MlValidationError(
                 code = "INSUFFICIENT_DATA",
