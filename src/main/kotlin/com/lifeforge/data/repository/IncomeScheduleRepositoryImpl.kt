@@ -158,7 +158,11 @@ class IncomeScheduleRepositoryImpl(
                 source = schedule.source,
                 amount = schedule.amountPerOccurrence,
                 incomeType = schedule.incomeType,
-                recurring = schedule.recurrence != RecurrenceType.ONE_TIME,
+                // Registros gerados sao pontos historicos, nao a flag "recorrente
+                // mensal" do dashboard. Marca-los true faria o snapshot somar N
+                // meses (N-contagem). O ritmo mensal do dashboard deve derivar dos
+                // schedules ativos numa iteracao futura (fora do escopo da sprint).
+                recurring = false,
                 receivedAt = date,
                 scheduleId = schedule.id,
             )

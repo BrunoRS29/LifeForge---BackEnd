@@ -144,7 +144,9 @@ class ExpenseScheduleRepositoryImpl(
                 description = schedule.description,
                 amount = schedule.amountPerOccurrence,
                 category = schedule.category,
-                recurring = schedule.recurrence != RecurrenceType.ONE_TIME,
+                // Ver IncomeScheduleRepositoryImpl: gerados nao entram no
+                // somatorio "recorrente" do dashboard (evita N-contagem).
+                recurring = false,
                 spentAt = date,
                 scheduleId = schedule.id,
             )
