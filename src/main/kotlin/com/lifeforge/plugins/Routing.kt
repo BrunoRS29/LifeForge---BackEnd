@@ -48,8 +48,8 @@ fun Application.configureRouting(container: AppContainer) {
         // CRUD existentes (Sprint 1)
         userRoutes(container.userRepository)
         goalRoutes(container.goalRepository)
-        incomeRoutes(container.incomeRepository)
-        expenseRoutes(container.expenseRepository)
+        incomeRoutes(container.incomeRepository, container.incomeScheduleRepository)
+        expenseRoutes(container.expenseRepository, container.expenseScheduleRepository)
         assetRoutes(container.assetRepository)
 
         // Simulacao - rota classica (Sprint 2) e calibrada (Sprint 5)

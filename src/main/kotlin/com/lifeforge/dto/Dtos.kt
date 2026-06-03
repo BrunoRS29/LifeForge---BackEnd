@@ -121,6 +121,62 @@ data class ExpenseDto(
     val createdAt: String
 )
 
+// ========== INCOME SCHEDULES (Sprint 6) ==========
+
+@Serializable
+data class IncomeScheduleRequest(
+    val source: String,
+    val amountPerOccurrence: String,    // BigDecimal serializado como string
+    val incomeType: String,             // IncomeType
+    val recurrence: String,             // ONE_TIME | MONTHLY | INSTALLMENTS
+    val startDate: String,              // ISO-8601
+    val endDate: String? = null,        // ISO-8601, null = indefinido (MONTHLY)
+    val installmentsTotal: Int? = null  // obrigatorio se INSTALLMENTS
+)
+
+@Serializable
+data class IncomeScheduleDto(
+    val id: Long,
+    val userId: Long,
+    val source: String,
+    val amountPerOccurrence: String,
+    val incomeType: String,
+    val recurrence: String,
+    val startDate: String,
+    val endDate: String?,
+    val installmentsTotal: Int?,
+    val createdAt: String,
+    val generatedCount: Int             // quantos Incomes este schedule gerou
+)
+
+// ========== EXPENSE SCHEDULES (Sprint 6) ==========
+
+@Serializable
+data class ExpenseScheduleRequest(
+    val description: String,
+    val amountPerOccurrence: String,
+    val category: String,               // ExpenseCategory
+    val recurrence: String,             // ONE_TIME | MONTHLY | INSTALLMENTS
+    val startDate: String,
+    val endDate: String? = null,
+    val installmentsTotal: Int? = null
+)
+
+@Serializable
+data class ExpenseScheduleDto(
+    val id: Long,
+    val userId: Long,
+    val description: String,
+    val amountPerOccurrence: String,
+    val category: String,
+    val recurrence: String,
+    val startDate: String,
+    val endDate: String?,
+    val installmentsTotal: Int?,
+    val createdAt: String,
+    val generatedCount: Int
+)
+
 // ========== ASSETS ==========
 
 @Serializable
