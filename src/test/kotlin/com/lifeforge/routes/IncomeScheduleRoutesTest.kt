@@ -7,6 +7,8 @@ import com.lifeforge.data.tables.IncomeSchedules
 import com.lifeforge.data.tables.Incomes
 import com.lifeforge.data.tables.Users
 import com.lifeforge.domain.model.RiskProfile
+import com.lifeforge.dto.IncomeDto
+import com.lifeforge.dto.IncomeRequest
 import com.lifeforge.dto.IncomeScheduleDto
 import com.lifeforge.dto.IncomeScheduleRequest
 import com.lifeforge.plugins.configureSecurity
@@ -18,6 +20,7 @@ import io.ktor.client.call.body
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.bearerAuth
 import io.ktor.client.request.post
+import io.ktor.client.request.put
 import io.ktor.client.request.setBody
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
@@ -114,6 +117,68 @@ class IncomeScheduleRoutesTest {
         }
 
         response.status shouldBe HttpStatusCode.Unauthorized
+    }
+
+    @Test
+    fun `PUT incomes id atualiza o registro e retorna 200`() = testApplication {
+        val ctx = setupTestApp("updTest1")
+        val client = jsonClient()
+        val (_, token) = ctx.createUserAndToken("update@test.com")
+
+        val created = client.post("/api/v1/incomes") {
+            bearerAuth(token)
+            contentType(ContentType.Application.Json)
+            setBody(
+                IncomeRequest(
+                    source = "Salario",
+                    amount = "5000.00",
+                    incomeType = "SALARY",
+                    recurring = false,
+                    receivedAt = "2025-01-05T00:00:00Z",
+                )
+            )
+        }.body<IncomeDto>()
+
+        val response = client.put("/api/v1/incomes/${created.id}") {
+            bearerAuth(token)
+            contentType(ContentType.Application.Json)
+            setBody(
+                IncomeRequest(
+                    source = "Salario reajustado",
+                    amount = "6000.00",
+                    incomeType = "SALARY",
+                    recurring = true,
+                    receivedAt = "2025-02-05T00:00:00Z",
+                )
+            )
+        }
+
+        response.status shouldBe HttpStatusCode.OK
+        val updated = response.body<IncomeDto>()
+        updated.id shouldBe created.id
+        updated.source shouldBe "Salario reajustado"
+        updated.amount shouldBe "6000.00"
+        updated.recurring shouldBe true
+    }
+
+    @Test
+    fun `PUT incomes id inexistente retorna 404`() = testApplication {
+        val ctx = setupTestApp("updTest2")
+        val client = jsonClient()
+        val (_, token) = ctx.createUserAndToken("update404@test.com")
+
+        val response = client.put("/api/v1/incomes/99999") {
+            bearerAuth(token)
+            contentType(ContentType.Application.Json)
+            setBody(
+                IncomeRequest(
+                    source = "x", amount = "1.00", incomeType = "SALARY",
+                    recurring = false, receivedAt = "2025-01-05T00:00:00Z",
+                )
+            )
+        }
+
+        response.status shouldBe HttpStatusCode.NotFound
     }
 
     // =================================================================

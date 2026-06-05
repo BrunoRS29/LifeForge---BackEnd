@@ -52,6 +52,30 @@ class IncomeRepositoryImpl : IncomeRepository {
         )
     }
 
+    override suspend fun update(
+        id: Long,
+        userId: Long,
+        source: String,
+        amount: BigDecimal,
+        incomeType: IncomeType,
+        recurring: Boolean,
+        receivedAt: Instant,
+    ): Income? = dbQuery {
+        val updated = Incomes.update({ (Incomes.id eq id) and (Incomes.userId eq userId) }) {
+            it[Incomes.sourceColumn] = source
+            it[Incomes.amount] = amount
+            it[Incomes.incomeType] = incomeType.name
+            it[Incomes.recurring] = recurring
+            it[Incomes.receivedAt] = receivedAt
+        }
+        if (updated > 0) {
+            Incomes.selectAll()
+                .where { (Incomes.id eq id) and (Incomes.userId eq userId) }
+                .singleOrNull()
+                ?.toIncome()
+        } else null
+    }
+
     override suspend fun findAllByUser(userId: Long): List<Income> = dbQuery {
         Incomes
             .selectAll()

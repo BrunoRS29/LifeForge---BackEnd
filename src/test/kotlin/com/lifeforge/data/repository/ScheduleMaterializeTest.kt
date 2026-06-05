@@ -40,6 +40,10 @@ class ScheduleMaterializeTest : StringSpec({
         ).also { created += it }
         override suspend fun findAllByUser(userId: Long) = created
         override suspend fun findById(id: Long, userId: Long): Income? = null
+        override suspend fun update(
+            id: Long, userId: Long, source: String, amount: BigDecimal,
+            incomeType: IncomeType, recurring: Boolean, receivedAt: Instant,
+        ): Income? = null
         override suspend fun findByScheduleId(userId: Long, scheduleId: Long) =
             created.filter { it.scheduleId == scheduleId }
         override suspend fun delete(id: Long, userId: Long) = false
@@ -58,6 +62,10 @@ class ScheduleMaterializeTest : StringSpec({
         ).also { created += it }
         override suspend fun findAllByUser(userId: Long) = created
         override suspend fun findById(id: Long, userId: Long): Expense? = null
+        override suspend fun update(
+            id: Long, userId: Long, description: String, amount: BigDecimal,
+            category: ExpenseCategory, recurring: Boolean, spentAt: Instant,
+        ): Expense? = null
         override suspend fun findByScheduleId(userId: Long, scheduleId: Long) =
             created.filter { it.scheduleId == scheduleId }
         override suspend fun delete(id: Long, userId: Long) = false

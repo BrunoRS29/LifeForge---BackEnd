@@ -104,6 +104,17 @@ interface IncomeRepository {
         scheduleId: Long? = null,
     ): Income
 
+    /** Atualiza os campos editaveis de um registro (preserva scheduleId/createdAt). */
+    suspend fun update(
+        id: Long,
+        userId: Long,
+        source: String,
+        amount: BigDecimal,
+        incomeType: IncomeType,
+        recurring: Boolean,
+        receivedAt: Instant,
+    ): Income?
+
     suspend fun findAllByUser(userId: Long): List<Income>
     suspend fun findById(id: Long, userId: Long): Income?
     suspend fun findByScheduleId(userId: Long, scheduleId: Long): List<Income>
@@ -132,6 +143,17 @@ interface ExpenseRepository {
         spentAt: Instant,
         scheduleId: Long? = null,
     ): Expense
+
+    /** Atualiza os campos editaveis de um registro (preserva scheduleId/createdAt). */
+    suspend fun update(
+        id: Long,
+        userId: Long,
+        description: String,
+        amount: BigDecimal,
+        category: ExpenseCategory,
+        recurring: Boolean,
+        spentAt: Instant,
+    ): Expense?
 
     suspend fun findAllByUser(userId: Long): List<Expense>
     suspend fun findById(id: Long, userId: Long): Expense?

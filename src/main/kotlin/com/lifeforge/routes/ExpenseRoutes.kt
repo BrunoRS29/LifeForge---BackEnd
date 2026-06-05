@@ -152,6 +152,33 @@ fun Route.expenseRoutes(
                 else call.respond(expense.toDto())
             }
 
+            put("/{id}") {
+                val userId = call.userId()
+                val id = call.parameters["id"]?.toLongOrNull() ?: run {
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("INVALID_ID", "ID invalido"))
+                    return@put
+                }
+                val req = call.receive<ExpenseRequest>()
+                val category = runCatching { ExpenseCategory.valueOf(req.category) }.getOrNull()
+                val amount = runCatching { BigDecimal(req.amount) }.getOrNull()
+                val spentAt = runCatching { Instant.parse(req.spentAt) }.getOrNull()
+                if (req.description.isBlank() || category == null || amount == null || amount <= BigDecimal.ZERO || spentAt == null) {
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("VALIDATION", "Dados da despesa invalidos"))
+                    return@put
+                }
+                val updated = repository.update(
+                    id = id,
+                    userId = userId,
+                    description = req.description.trim(),
+                    amount = amount,
+                    category = category,
+                    recurring = req.recurring,
+                    spentAt = spentAt,
+                )
+                if (updated == null) call.respond(HttpStatusCode.NotFound, ErrorResponse("NOT_FOUND", "Despesa nao encontrada"))
+                else call.respond(updated.toDto())
+            }
+
             delete("/{id}") {
                 val userId = call.userId()
                 val id = call.parameters["id"]?.toLongOrNull() ?: run {

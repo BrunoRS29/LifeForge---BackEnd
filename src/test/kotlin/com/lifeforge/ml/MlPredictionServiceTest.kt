@@ -47,6 +47,10 @@ class MlPredictionServiceTest : StringSpec({
         ): Income = throw NotImplementedError()
         override suspend fun findAllByUser(userId: Long): List<Income> = items
         override suspend fun findById(id: Long, userId: Long): Income? = null
+        override suspend fun update(
+            id: Long, userId: Long, source: String, amount: java.math.BigDecimal,
+            incomeType: IncomeType, recurring: Boolean, receivedAt: Instant,
+        ): Income? = null
         override suspend fun findByScheduleId(userId: Long, scheduleId: Long): List<Income> = emptyList()
         override suspend fun delete(id: Long, userId: Long): Boolean = false
         override suspend fun deleteByScheduleId(userId: Long, scheduleId: Long, futureAfter: Instant?): Int = 0
@@ -60,6 +64,10 @@ class MlPredictionServiceTest : StringSpec({
         ): Expense = throw NotImplementedError()
         override suspend fun findAllByUser(userId: Long): List<Expense> = items
         override suspend fun findById(id: Long, userId: Long): Expense? = null
+        override suspend fun update(
+            id: Long, userId: Long, description: String, amount: java.math.BigDecimal,
+            category: ExpenseCategory, recurring: Boolean, spentAt: Instant,
+        ): Expense? = null
         override suspend fun findByScheduleId(userId: Long, scheduleId: Long): List<Expense> = emptyList()
         override suspend fun delete(id: Long, userId: Long): Boolean = false
         override suspend fun deleteByScheduleId(userId: Long, scheduleId: Long, futureAfter: Instant?): Int = 0

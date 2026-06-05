@@ -16,6 +16,7 @@ import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.deleteWhere
 import org.jetbrains.exposed.sql.insertAndGetId
 import org.jetbrains.exposed.sql.selectAll
+import org.jetbrains.exposed.sql.update
 import java.math.BigDecimal
 import java.time.Instant
 
@@ -52,6 +53,30 @@ class ExpenseRepositoryImpl : ExpenseRepository {
             createdAt = now,
             scheduleId = scheduleId
         )
+    }
+
+    override suspend fun update(
+        id: Long,
+        userId: Long,
+        description: String,
+        amount: BigDecimal,
+        category: ExpenseCategory,
+        recurring: Boolean,
+        spentAt: Instant,
+    ): Expense? = dbQuery {
+        val updated = Expenses.update({ (Expenses.id eq id) and (Expenses.userId eq userId) }) {
+            it[Expenses.description] = description
+            it[Expenses.amount] = amount
+            it[Expenses.category] = category.name
+            it[Expenses.recurring] = recurring
+            it[Expenses.spentAt] = spentAt
+        }
+        if (updated > 0) {
+            Expenses.selectAll()
+                .where { (Expenses.id eq id) and (Expenses.userId eq userId) }
+                .singleOrNull()
+                ?.toExpense()
+        } else null
     }
 
     override suspend fun findAllByUser(userId: Long): List<Expense> = dbQuery {
