@@ -35,6 +35,9 @@ fun Application.configureHTTP() {
     install(StatusPages) {
 
         exception<Throwable> { call: ApplicationCall, cause: Throwable ->
+            // Loga o stack trace - sem isto os 500 ficam silenciosos e
+            // impossiveis de diagnosticar (vide bug do run-calibrated).
+            call.application.log.error("Unhandled exception (500)", cause)
             call.respond(
                 HttpStatusCode.InternalServerError,
                 ErrorResponse("INTERNAL_ERROR", cause.message ?: "Erro interno")

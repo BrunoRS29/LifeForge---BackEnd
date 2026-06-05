@@ -25,6 +25,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
 /**
  * Rota da Sprint 5 que executa Monte Carlo com parametros calibrados por IA.
@@ -115,28 +117,28 @@ fun Route.simulationCalibratedRoutes(
                 }
 
                 // 6. Persiste a simulacao - usa `goalId` e armazena parametros
-                // calibrados ja com o monthlyContribution derivado
-                val parametersJson = Json.parseToJsonElement(
-                    json.encodeToString(
-                        // serializa os parametros efetivos (ja calibrados)
-                        mapOf(
-                            "initialCapital" to calibration.parameters.initialCapital,
-                            "monthlyContribution" to calibration.parameters.monthlyContribution,
-                            "expectedReturnAnnual" to calibration.parameters.expectedReturnAnnual,
-                            "volatilityAnnual" to calibration.parameters.volatilityAnnual,
-                            "horizonMonths" to calibration.parameters.horizonMonths,
-                            "targetAmount" to calibration.parameters.targetAmount,
-                            "unemploymentProbAnnual" to calibration.parameters.unemploymentProbAnnual,
-                            "unemploymentDurationMonths" to calibration.parameters.unemploymentDurationMonths,
-                            "inflationAnnual" to calibration.parameters.inflationAnnual,
-                            "numSimulations" to calibration.parameters.numSimulations,
-                            "seed" to calibration.parameters.seed,
-                            // referencias as predicoes que originaram a calibracao
-                            "incomePredictionId" to incomeOutcome.prediction.id,
-                            "expensePredictionId" to expenseOutcome.prediction.id,
-                        )
-                    )
-                )
+                // calibrados ja com o monthlyContribution derivado.
+                //
+                // buildJsonObject em vez de encodeToString(mapOf(...)): o mapa
+                // mistura Double/Int/Long, virando Map<String, Any>, e o kotlinx
+                // NAO tem serializer para Any -> estourava SerializationException
+                // (500) em todo run-calibrated que chegava ate aqui.
+                val parametersJson = buildJsonObject {
+                    put("initialCapital", calibration.parameters.initialCapital)
+                    put("monthlyContribution", calibration.parameters.monthlyContribution)
+                    put("expectedReturnAnnual", calibration.parameters.expectedReturnAnnual)
+                    put("volatilityAnnual", calibration.parameters.volatilityAnnual)
+                    put("horizonMonths", calibration.parameters.horizonMonths)
+                    put("targetAmount", calibration.parameters.targetAmount)
+                    put("unemploymentProbAnnual", calibration.parameters.unemploymentProbAnnual)
+                    put("unemploymentDurationMonths", calibration.parameters.unemploymentDurationMonths)
+                    put("inflationAnnual", calibration.parameters.inflationAnnual)
+                    put("numSimulations", calibration.parameters.numSimulations)
+                    put("seed", calibration.parameters.seed)
+                    // referencias as predicoes que originaram a calibracao
+                    put("incomePredictionId", incomeOutcome.prediction.id)
+                    put("expensePredictionId", expenseOutcome.prediction.id)
+                }
 
                 val resultDto = result.toResponseDto(
                     simulationId = 0L,
