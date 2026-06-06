@@ -48,6 +48,7 @@ class ScheduleMaterializeTest : StringSpec({
             created.filter { it.scheduleId == scheduleId }
         override suspend fun delete(id: Long, userId: Long) = false
         override suspend fun deleteByScheduleId(userId: Long, scheduleId: Long, futureAfter: Instant?) = 0
+        override suspend fun deleteAllByUser(userId: Long): Int = 0
     }
 
     class RecordingExpenseRepo : ExpenseRepository {
@@ -70,6 +71,7 @@ class ScheduleMaterializeTest : StringSpec({
             created.filter { it.scheduleId == scheduleId }
         override suspend fun delete(id: Long, userId: Long) = false
         override suspend fun deleteByScheduleId(userId: Long, scheduleId: Long, futureAfter: Instant?) = 0
+        override suspend fun deleteAllByUser(userId: Long): Int = 0
     }
 
     "IncomeSchedule.materialize MONTHLY gera 1 registro por mes ligado ao schedule" {

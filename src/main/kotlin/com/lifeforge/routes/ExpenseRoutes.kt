@@ -65,6 +65,12 @@ fun Route.expenseRoutes(
                 call.respond(HttpStatusCode.Created, expense.toDto())
             }
 
+            // DELETE /api/v1/expenses -> remove TODAS as despesas do usuario
+            delete {
+                val deleted = repository.deleteAllByUser(call.userId())
+                call.respond(mapOf("deleted" to deleted))
+            }
+
             // -------- Schedules recorrentes --------
             route("/schedules") {
 

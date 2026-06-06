@@ -67,6 +67,12 @@ fun Route.incomeRoutes(
                 call.respond(HttpStatusCode.Created, income.toDto())
             }
 
+            // DELETE /api/v1/incomes -> remove TODAS as receitas do usuario
+            delete {
+                val deleted = repository.deleteAllByUser(call.userId())
+                call.respond(mapOf("deleted" to deleted))
+            }
+
             // -------- Schedules recorrentes --------
             route("/schedules") {
 

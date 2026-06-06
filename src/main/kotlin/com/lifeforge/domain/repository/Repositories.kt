@@ -120,6 +120,9 @@ interface IncomeRepository {
     suspend fun findByScheduleId(userId: Long, scheduleId: Long): List<Income>
     suspend fun delete(id: Long, userId: Long): Boolean
 
+    /** Remove TODAS as receitas do usuario. Retorna a quantidade removida. */
+    suspend fun deleteAllByUser(userId: Long): Int
+
     /**
      * Remove registros gerados por um schedule.
      *  - futureAfter == null -> remove TODOS os vinculados ao schedule
@@ -159,6 +162,9 @@ interface ExpenseRepository {
     suspend fun findById(id: Long, userId: Long): Expense?
     suspend fun findByScheduleId(userId: Long, scheduleId: Long): List<Expense>
     suspend fun delete(id: Long, userId: Long): Boolean
+
+    /** Remove TODAS as despesas do usuario. Retorna a quantidade removida. */
+    suspend fun deleteAllByUser(userId: Long): Int
 
     /** Ver [IncomeRepository.deleteByScheduleId]: futureAfter==null remove todos. */
     suspend fun deleteByScheduleId(userId: Long, scheduleId: Long, futureAfter: Instant?): Int

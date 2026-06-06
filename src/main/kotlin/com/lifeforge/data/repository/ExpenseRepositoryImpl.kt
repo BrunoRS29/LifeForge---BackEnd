@@ -97,6 +97,10 @@ class ExpenseRepositoryImpl : ExpenseRepository {
         Expenses.deleteWhere { (Expenses.id eq id) and (Expenses.userId eq userId) } > 0
     }
 
+    override suspend fun deleteAllByUser(userId: Long): Int = dbQuery {
+        Expenses.deleteWhere { Expenses.userId eq userId }
+    }
+
     override suspend fun findByScheduleId(userId: Long, scheduleId: Long): List<Expense> = dbQuery {
         Expenses.selectAll()
             .where {

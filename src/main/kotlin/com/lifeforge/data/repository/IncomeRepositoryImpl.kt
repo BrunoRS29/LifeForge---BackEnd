@@ -98,6 +98,10 @@ class IncomeRepositoryImpl : IncomeRepository {
         } > 0
     }
 
+    override suspend fun deleteAllByUser(userId: Long): Int = dbQuery {
+        Incomes.deleteWhere { Incomes.userId eq userId }
+    }
+
     override suspend fun findByScheduleId(userId: Long, scheduleId: Long): List<Income> = dbQuery {
         Incomes.selectAll()
             .where {

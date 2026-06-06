@@ -54,6 +54,7 @@ class MlPredictionServiceTest : StringSpec({
         override suspend fun findByScheduleId(userId: Long, scheduleId: Long): List<Income> = emptyList()
         override suspend fun delete(id: Long, userId: Long): Boolean = false
         override suspend fun deleteByScheduleId(userId: Long, scheduleId: Long, futureAfter: Instant?): Int = 0
+        override suspend fun deleteAllByUser(userId: Long): Int = 0
     }
 
     class FakeExpenseRepo(private val items: List<Expense>) : ExpenseRepository {
@@ -71,6 +72,7 @@ class MlPredictionServiceTest : StringSpec({
         override suspend fun findByScheduleId(userId: Long, scheduleId: Long): List<Expense> = emptyList()
         override suspend fun delete(id: Long, userId: Long): Boolean = false
         override suspend fun deleteByScheduleId(userId: Long, scheduleId: Long, futureAfter: Instant?): Int = 0
+        override suspend fun deleteAllByUser(userId: Long): Int = 0
     }
 
     class FakePredictionRepo : PredictionRepository {
