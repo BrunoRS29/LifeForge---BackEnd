@@ -18,6 +18,7 @@ from threading import RLock
 from app.models.base import BaseModel
 from app.models.expense_model import ExpenseRandomForestModel
 from app.models.income_model import IncomeRegressionModel
+from app.models.wealth_model import WealthArimaModel
 from app.schemas import ModelMetricsEntry, ModelsMetricsResponse
 
 
@@ -31,6 +32,7 @@ class ModelRegistry:
         self._models: dict[str, BaseModel] = {
             IncomeRegressionModel.name: IncomeRegressionModel(),
             ExpenseRandomForestModel.name: ExpenseRandomForestModel(),
+            WealthArimaModel.name: WealthArimaModel(),
         }
 
     def get(self, name: str) -> BaseModel:

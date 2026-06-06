@@ -13,6 +13,9 @@ pydantic-settings==2.7.0
 scikit-learn==1.5.2
 numpy>=2.1.0
 pandas==2.2.3
+# Serie temporal de patrimonio (modelo ARIMA). Puxa scipy + patsy.
+# Ha fallback de tendencia linear no codigo caso o import falhe.
+statsmodels==0.14.4
 
 # Logs estruturados
 structlog==24.4.0

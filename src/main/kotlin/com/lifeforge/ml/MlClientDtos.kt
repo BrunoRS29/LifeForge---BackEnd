@@ -104,6 +104,38 @@ data class ExpensePredictionResponseDto(
 )
 
 // ============================================================================
+// /predict/wealth
+// ============================================================================
+
+@Serializable
+data class WealthObservationDto(
+    @SerialName("month_index") val monthIndex: Int,
+    val amount: Double,
+)
+
+@Serializable
+data class WealthPredictionRequestDto(
+    val history: List<WealthObservationDto>,
+    @SerialName("horizon_months") val horizonMonths: Int = 12,
+)
+
+@Serializable
+data class WealthPredictionPointDto(
+    @SerialName("month_index") val monthIndex: Int,
+    @SerialName("predicted_amount") val predictedAmount: Double,
+)
+
+@Serializable
+data class WealthPredictionResponseDto(
+    @SerialName("model_name") val modelName: String,
+    @SerialName("horizon_months") val horizonMonths: Int,
+    val projection: List<WealthPredictionPointDto>,
+    @SerialName("expected_final_wealth") val expectedFinalWealth: Double,
+    @SerialName("monthly_growth_rate") val monthlyGrowthRate: Double,
+    val metrics: ModelMetricsDto,
+)
+
+// ============================================================================
 // /models/metrics
 // ============================================================================
 

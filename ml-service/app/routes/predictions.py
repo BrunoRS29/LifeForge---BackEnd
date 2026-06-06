@@ -17,11 +17,14 @@ from fastapi import APIRouter, Depends
 
 from app.models.expense_model import ExpenseRandomForestModel
 from app.models.income_model import IncomeRegressionModel
+from app.models.wealth_model import WealthArimaModel
 from app.schemas import (
     ExpensePredictionRequest,
     ExpensePredictionResponse,
     IncomePredictionRequest,
     IncomePredictionResponse,
+    WealthPredictionRequest,
+    WealthPredictionResponse,
 )
 from app.services.registry import ModelRegistry, get_registry
 
@@ -68,5 +71,25 @@ def predict_expenses(
     """
     model = registry.get(ExpenseRandomForestModel.name)
     assert isinstance(model, ExpenseRandomForestModel)
+    model.fit(request.history)
+    return model.predict(request.horizon_months)
+
+
+@router.post(
+    "/wealth",
+    response_model=WealthPredictionResponse,
+    summary="Projeta patrimonio usando serie temporal (ARIMA)",
+)
+def predict_wealth(
+    request: WealthPredictionRequest,
+    registry: ModelRegistry = Depends(get_registry),
+) -> WealthPredictionResponse:
+    """
+    Treina um modelo de serie temporal (ARIMA, com fallback de tendencia
+    linear) sobre a serie mensal de patrimonio reconstruida pelo backend e
+    devolve a projecao para os proximos `horizon_months` meses.
+    """
+    model = registry.get(WealthArimaModel.name)
+    assert isinstance(model, WealthArimaModel)
     model.fit(request.history)
     return model.predict(request.horizon_months)

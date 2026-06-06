@@ -8,7 +8,11 @@ import com.lifeforge.dto.PredictExpensesResponse
 import com.lifeforge.dto.PredictIncomePointResponse
 import com.lifeforge.dto.PredictIncomeRequest
 import com.lifeforge.dto.PredictIncomeResponse
+import com.lifeforge.dto.PredictWealthPointResponse
+import com.lifeforge.dto.PredictWealthRequest
+import com.lifeforge.dto.PredictWealthResponse
 import com.lifeforge.dto.PredictionSummaryResponse
+import com.lifeforge.dto.WealthHistoryPointResponse
 import com.lifeforge.ml.MlClientException
 import com.lifeforge.ml.MlInternalError
 import com.lifeforge.ml.MlPredictionService
@@ -125,6 +129,55 @@ fun Route.predictionRoutes(
                                     )
                                 },
                                 expectedMonthlyExpense = r.expectedMonthlyExpense,
+                                mae = r.metrics.mae,
+                                rmse = r.metrics.rmse,
+                                r2 = r.metrics.r2,
+                                createdAt = outcome.prediction.createdAt.toString(),
+                            ),
+                        )
+                    }
+                    .onFailure { call.respondMlError(it) }
+            }
+
+            // ----------------------------------------------------------------
+            // POST /api/v1/predictions/wealth
+            // ----------------------------------------------------------------
+            post("/wealth") {
+                val userId = call.userId()
+                val request = call.receive<PredictWealthRequest>()
+
+                if (request.horizonMonths !in 1..60) {
+                    return@post call.respond(
+                        HttpStatusCode.BadRequest,
+                        ErrorResponse(
+                            "VALIDATION",
+                            "horizonMonths deve estar em [1, 60]",
+                        ),
+                    )
+                }
+
+                runCatching {
+                    predictionService.predictWealthFor(userId, request.horizonMonths)
+                }
+                    .onSuccess { outcome ->
+                        val r = outcome.response
+                        call.respond(
+                            HttpStatusCode.Created,
+                            PredictWealthResponse(
+                                predictionId = outcome.prediction.id,
+                                modelName = r.modelName,
+                                horizonMonths = r.horizonMonths,
+                                history = outcome.history.map {
+                                    WealthHistoryPointResponse(it.monthIndex, it.amount)
+                                },
+                                projection = r.projection.map {
+                                    PredictWealthPointResponse(
+                                        monthIndex = it.monthIndex,
+                                        predictedAmount = it.predictedAmount,
+                                    )
+                                },
+                                expectedFinalWealth = r.expectedFinalWealth,
+                                monthlyGrowthRate = r.monthlyGrowthRate,
                                 mae = r.metrics.mae,
                                 rmse = r.metrics.rmse,
                                 r2 = r.metrics.r2,

@@ -163,6 +163,60 @@ class ExpensePredictionResponse(BaseModel):
 
 
 # ============================================================================
+# /predict/wealth (serie temporal de patrimonio)
+# ============================================================================
+
+
+class WealthObservation(BaseModel):
+    """Patrimonio (acumulado) ao fim de um mes da serie historica.
+
+    A serie e reconstruida pelo backend a partir do fluxo de caixa
+    (receitas - despesas acumuladas). `amount` pode ser negativo.
+    """
+
+    month_index: int = Field(..., description="Indice sequencial do mes (0 = primeiro)")
+    amount: float = Field(..., description="Patrimonio acumulado no mes")
+
+
+class WealthPredictionRequest(BaseModel):
+    """Request do POST /predict/wealth."""
+
+    history: list[WealthObservation]
+    horizon_months: int = Field(default=12, ge=1)
+
+    @field_validator("history")
+    @classmethod
+    def history_not_empty(cls, v: list[WealthObservation]) -> list[WealthObservation]:
+        if not v:
+            raise ValueError("history nao pode ser vazio")
+        return v
+
+
+class WealthPredictionPoint(BaseModel):
+    """Um ponto da projecao de patrimonio."""
+
+    month_index: int = Field(..., description="Offset em meses (1 = proximo mes)")
+    predicted_amount: float = Field(..., description="Patrimonio projetado")
+
+
+class WealthPredictionResponse(BaseModel):
+    """Response do POST /predict/wealth."""
+
+    model_config = ConfigDict(protected_namespaces=())
+
+    model_name: str = "WEALTH_ARIMA"
+    horizon_months: int
+    projection: list[WealthPredictionPoint]
+    expected_final_wealth: float = Field(
+        ..., description="Patrimonio projetado ao fim do horizonte"
+    )
+    monthly_growth_rate: float = Field(
+        ..., description="Crescimento mensal medio (inclinacao / nivel medio)"
+    )
+    metrics: ModelMetrics
+
+
+# ============================================================================
 # /models/metrics
 # ============================================================================
 

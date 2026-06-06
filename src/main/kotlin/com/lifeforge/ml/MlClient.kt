@@ -126,6 +126,12 @@ class MlClient(
     ): ExpensePredictionResponseDto =
         postJson("predict/expenses", request)
 
+    /** POST /predict/wealth */
+    suspend fun predictWealth(
+        request: WealthPredictionRequestDto,
+    ): WealthPredictionResponseDto =
+        postJson("predict/wealth", request)
+
     /** GET /models/metrics */
     suspend fun modelsMetrics(): ModelsMetricsResponseDto =
         getJson("models/metrics")

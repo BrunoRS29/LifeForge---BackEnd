@@ -132,6 +132,93 @@ class MlPredictionService(
     }
 
     // ========================================================================
+    // Predict wealth (serie temporal de patrimonio)
+    // ========================================================================
+
+    /**
+     * Predicao de patrimonio. Reconstroi a serie mensal de patrimonio do
+     * usuario a partir do fluxo de caixa (receitas - despesas acumuladas) e
+     * delega a projecao ao modelo ARIMA do microsservico Python.
+     *
+     * Retorna [WealthOutcome] que carrega tambem a serie historica
+     * reconstruida (a parte "real" do grafico real x projetado), ja que o
+     * Python so devolve a projecao.
+     */
+    suspend fun predictWealthFor(
+        userId: Long,
+        horizonMonths: Int,
+    ): WealthOutcome {
+        val now = Instant.now()
+        val incomes = incomeRepository.findAllByUser(userId)
+            .filter { !it.receivedAt.isAfter(now) }
+        val expenses = expenseRepository.findAllByUser(userId)
+            .filter { !it.spentAt.isAfter(now) }
+
+        val series = reconstructWealthSeries(incomes, expenses)
+        if (series.size < MIN_WEALTH_OBSERVATIONS) {
+            throw MlValidationError(
+                code = "INSUFFICIENT_DATA",
+                message = "Historico de patrimonio precisa de >= $MIN_WEALTH_OBSERVATIONS " +
+                    "meses (atualmente ${series.size}). Registre mais receitas/despesas.",
+            )
+        }
+
+        val request = WealthPredictionRequestDto(history = series, horizonMonths = horizonMonths)
+        val response = mlClient.predictWealth(request)
+
+        val persisted = predictionRepository.create(
+            userId = userId,
+            modelName = MODEL_WEALTH,
+            input = request.toJsonElement(),
+            output = response.toJsonElement(),
+            errorMetric = response.metrics.mae.toBigDecimalScaled(),
+        )
+
+        return WealthOutcome(prediction = persisted, response = response, history = series)
+    }
+
+    /**
+     * Reconstroi a serie mensal de patrimonio acumulado a partir do fluxo de
+     * caixa: para cada mes, soma (receitas - despesas) e acumula. O resultado
+     * e uma serie contigua (sem buracos) de patrimonio acumulado, base de
+     * treino do modelo de serie temporal.
+     *
+     * NB: usa patrimonio acumulado via fluxo de caixa (nao inclui o saldo
+     * inicial de ativos) - o foco e a TENDENCIA, que e o que o ARIMA projeta.
+     */
+    private fun reconstructWealthSeries(
+        incomes: List<Income>,
+        expenses: List<Expense>,
+    ): List<WealthObservationDto> {
+        if (incomes.isEmpty() && expenses.isEmpty()) return emptyList()
+
+        fun yearMonthOf(instant: Instant): java.time.YearMonth =
+            java.time.YearMonth.from(instant.atZone(java.time.ZoneOffset.UTC))
+
+        val incomeByMonth = incomes.groupBy { yearMonthOf(it.receivedAt) }
+            .mapValues { (_, list) -> list.sumOf { it.amount.toDouble() } }
+        val expenseByMonth = expenses.groupBy { yearMonthOf(it.spentAt) }
+            .mapValues { (_, list) -> list.sumOf { it.amount.toDouble() } }
+
+        val months = incomeByMonth.keys + expenseByMonth.keys
+        val start = months.min()
+        val end = months.max()
+
+        val series = mutableListOf<WealthObservationDto>()
+        var cumulative = 0.0
+        var idx = 0
+        var ym = start
+        while (!ym.isAfter(end)) {
+            val net = (incomeByMonth[ym] ?: 0.0) - (expenseByMonth[ym] ?: 0.0)
+            cumulative += net
+            series.add(WealthObservationDto(monthIndex = idx, amount = cumulative))
+            idx++
+            ym = ym.plusMonths(1)
+        }
+        return series
+    }
+
+    // ========================================================================
     // Calibracao
     // ========================================================================
 
@@ -217,14 +304,27 @@ class MlPredictionService(
     private companion object {
         const val MODEL_INCOME = "INCOME_REGRESSION"
         const val MODEL_EXPENSE = "EXPENSE_RANDOM_FOREST"
+        const val MODEL_WEALTH = "WEALTH_ARIMA"
 
         // Limites espelham os defaults do Python (config.py do ml-service).
         // Validamos aqui tambem para evitar uma chamada HTTP custosa quando
         // ja sabemos que vai falhar.
         const val MIN_INCOME_OBSERVATIONS = 6
         const val MIN_EXPENSE_OBSERVATIONS = 12
+        const val MIN_WEALTH_OBSERVATIONS = 6
     }
 }
+
+/**
+ * Resultado da predicao de patrimonio: a [Prediction] persistida, o DTO da
+ * resposta do ML e a serie historica reconstruida pelo backend (parte "real"
+ * do grafico real x projetado, que o Python nao devolve).
+ */
+data class WealthOutcome(
+    val prediction: Prediction,
+    val response: WealthPredictionResponseDto,
+    val history: List<WealthObservationDto>,
+)
 
 /**
  * Wrapper de retorno: junta a [Prediction] persistida com o DTO original.

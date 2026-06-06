@@ -81,6 +81,44 @@ data class PredictExpensesResponse(
 )
 
 // ============================================================================
+// Predict wealth (serie temporal de patrimonio - request publica)
+// ============================================================================
+
+@Serializable
+data class PredictWealthRequest(
+    val horizonMonths: Int = 12,
+)
+
+/** Ponto da serie historica reconstruida (parte "real" do grafico). */
+@Serializable
+data class WealthHistoryPointResponse(
+    val monthIndex: Int,
+    val amount: Double,
+)
+
+/** Ponto da projecao futura (parte "projetada" do grafico). */
+@Serializable
+data class PredictWealthPointResponse(
+    val monthIndex: Int,
+    val predictedAmount: Double,
+)
+
+@Serializable
+data class PredictWealthResponse(
+    val predictionId: Long,
+    val modelName: String,
+    val horizonMonths: Int,
+    val history: List<WealthHistoryPointResponse>,
+    val projection: List<PredictWealthPointResponse>,
+    val expectedFinalWealth: Double,
+    val monthlyGrowthRate: Double,
+    val mae: Double,
+    val rmse: Double,
+    val r2: Double,
+    val createdAt: String,
+)
+
+// ============================================================================
 // Listagem (auditoria de predicoes do usuario)
 // ============================================================================
 

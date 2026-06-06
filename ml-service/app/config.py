@@ -50,6 +50,14 @@ class Settings(BaseSettings):
     expense_rf_max_depth: int = 10
     expense_rf_random_state: int = 42  # reprodutibilidade nos testes
 
+    # ------------------------------------------------------------------
+    # Serie temporal de patrimonio (ARIMA)
+    # ------------------------------------------------------------------
+    # Minimo de meses para treinar o ARIMA. Abaixo disso a serie e curta
+    # demais para estimar tendencia + autocorrelacao de forma confiavel.
+    wealth_min_observations: int = 6
+    wealth_max_horizon_months: int = 60
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
