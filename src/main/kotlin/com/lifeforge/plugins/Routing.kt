@@ -5,6 +5,7 @@ import com.lifeforge.routes.apiDocsRoutes
 import com.lifeforge.routes.assetRoutes
 import com.lifeforge.routes.authRoutes
 import com.lifeforge.routes.expenseRoutes
+import com.lifeforge.routes.financeImportRoutes
 import com.lifeforge.routes.goalRoutes
 import com.lifeforge.routes.incomeRoutes
 import com.lifeforge.routes.optimizationRoutes
@@ -55,6 +56,9 @@ fun Application.configureRouting(container: AppContainer) {
         incomeRoutes(container.incomeRepository, container.incomeScheduleRepository)
         expenseRoutes(container.expenseRepository, container.expenseScheduleRepository)
         assetRoutes(container.assetRepository)
+
+        // Importacao de extratos bancarios em lote (Receitas + Despesas)
+        financeImportRoutes(container.incomeRepository, container.expenseRepository)
 
         // Simulacao - rota classica (Sprint 2) e calibrada (Sprint 5)
         simulationRoutes(

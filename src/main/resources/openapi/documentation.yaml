@@ -263,6 +263,35 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/AssetDto" }
 
+  /api/v1/finance/import:
+    post:
+      tags: [Finance]
+      summary: Importa em lote receitas e despesas (extratos bancários já classificados no app)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                incomes:
+                  type: array
+                  items: { $ref: "#/components/schemas/IncomeRequest" }
+                expenses:
+                  type: array
+                  items: { $ref: "#/components/schemas/ExpenseRequest" }
+      responses:
+        "201":
+          description: Lote importado (linhas inválidas são contadas em skipped)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  incomesCreated: { type: integer }
+                  expensesCreated: { type: integer }
+                  skipped: { type: integer }
+
   /api/v1/simulation/run:
     post:
       tags: [Simulation]

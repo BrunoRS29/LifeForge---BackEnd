@@ -200,6 +200,25 @@ data class AssetDto(
     val createdAt: String
 )
 
+// ========== IMPORT (extratos bancarios) ==========
+
+/**
+ * Lote de lancamentos ja classificados pelo app (parsing por banco acontece
+ * no cliente). Receitas e despesas chegam juntas numa unica chamada.
+ */
+@Serializable
+data class ImportRequest(
+    val incomes: List<IncomeRequest> = emptyList(),
+    val expenses: List<ExpenseRequest> = emptyList()
+)
+
+@Serializable
+data class ImportResponse(
+    val incomesCreated: Int,
+    val expensesCreated: Int,
+    val skipped: Int        // linhas invalidas ignoradas (nao abortam o lote)
+)
+
 // ========== ERROS ==========
 
 @Serializable
