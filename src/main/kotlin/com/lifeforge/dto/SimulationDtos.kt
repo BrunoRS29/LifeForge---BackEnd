@@ -51,6 +51,9 @@ data class SimulationResultResponse(
     val bestCase: Double,
     val meanReal: Double,
     val histogram: List<HistogramBucketDto>,
+    // Bandas de percentil mes a mes para o fan chart. Default vazio para
+    // manter compatibilidade com simulacoes persistidas antes deste campo.
+    val trajectory: List<TrajectoryBandDto> = emptyList(),
     val executionTimeMs: Long,
     val createdAt: String, // ISO-8601
 )
@@ -60,6 +63,20 @@ data class HistogramBucketDto(
     val rangeStart: Double,
     val rangeEnd: Double,
     val count: Int,
+)
+
+/**
+ * Banda de percentis do patrimonio em um mes da simulacao (fan chart).
+ * monthIndex 0 = inicio; 1..horizonte = meses subsequentes.
+ */
+@Serializable
+data class TrajectoryBandDto(
+    val monthIndex: Int,
+    val p10: Double,
+    val p25: Double,
+    val p50: Double,
+    val p75: Double,
+    val p90: Double,
 )
 
 /**

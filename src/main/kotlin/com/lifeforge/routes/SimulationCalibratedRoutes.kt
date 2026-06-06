@@ -9,6 +9,7 @@ import com.lifeforge.dto.HistogramBucketDto
 import com.lifeforge.dto.RunCalibratedSimulationRequest
 import com.lifeforge.dto.RunCalibratedSimulationResponse
 import com.lifeforge.dto.SimulationResultResponse
+import com.lifeforge.dto.TrajectoryBandDto
 import com.lifeforge.engine.montecarlo.MonteCarloEngine
 import com.lifeforge.engine.montecarlo.MonteCarloParameters
 import com.lifeforge.engine.montecarlo.MonteCarloResult
@@ -228,6 +229,9 @@ private fun MonteCarloResult.toResponseDto(
     bestCase = bestCase,
     meanReal = meanReal,
     histogram = histogram.map { HistogramBucketDto(it.rangeStart, it.rangeEnd, it.count) },
+    trajectory = trajectory.map {
+        TrajectoryBandDto(it.monthIndex, it.p10, it.p25, it.p50, it.p75, it.p90)
+    },
     executionTimeMs = executionTimeMs,
     createdAt = createdAt,
 )

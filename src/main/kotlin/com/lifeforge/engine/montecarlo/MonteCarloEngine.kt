@@ -44,15 +44,24 @@ class MonteCarloEngine {
         val finalCapitals = DoubleArray(parameters.numSimulations)
         val random = Random(parameters.seed)
 
+        // Para o fan chart guardamos a trajetoria mes a mes de uma AMOSTRA das
+        // simulacoes - nao de todas: 10k x 240 doubles explodiria memoria e o
+        // payload JSON. Algumas centenas de amostras ja estabilizam os percentis.
+        val trajectorySampleSize = minOf(parameters.numSimulations, TRAJECTORY_SAMPLE_SIZE)
+        val sampledPaths = Array(trajectorySampleSize) {
+            DoubleArray(parameters.horizonMonths + 1)
+        }
+
         val executionTime = measureTimeMillis {
             // Cada iteracao do laco externo e UMA simulacao independente.
             // Cada iteracao do laco interno e UM mes dessa simulacao.
             for (sim in 0 until parameters.numSimulations) {
-                finalCapitals[sim] = simulateSingle(parameters, random)
+                val path = if (sim < trajectorySampleSize) sampledPaths[sim] else null
+                finalCapitals[sim] = simulateSingle(parameters, random, path)
             }
         }
 
-        return aggregate(finalCapitals, parameters, executionTime)
+        return aggregate(finalCapitals, sampledPaths, parameters, executionTime)
     }
 
     /**
@@ -60,9 +69,17 @@ class MonteCarloEngine {
      *
      * Isolada como funcao privada para facilitar testes e futura paralelizacao.
      */
-    private fun simulateSingle(params: MonteCarloParameters, random: Random): Double {
+    private fun simulateSingle(
+        params: MonteCarloParameters,
+        random: Random,
+        path: DoubleArray? = null,
+    ): Double {
         var capital = params.initialCapital
         var unemployedMonthsRemaining = 0
+
+        // path != null apenas para a amostra usada no fan chart. Indice 0 = mes
+        // inicial (capital inicial); indice month+1 = patrimonio ao fim do mes.
+        path?.set(0, capital)
 
         // Pre-calcula valores derivados uma vez por simulacao.
         val expectedReturnMonthly = params.expectedReturnMonthly
@@ -95,6 +112,9 @@ class MonteCarloEngine {
             // 5. Garante que o patrimonio nao fique negativo (limite de ruina).
             //    Se cair a zero (drawdown extremo), permanece em zero ate aporte futuro.
             if (capital < 0.0) capital = 0.0
+
+            // Registra o patrimonio ao fim deste mes (para o fan chart).
+            path?.set(month + 1, capital)
         }
 
         return capital
@@ -105,6 +125,7 @@ class MonteCarloEngine {
      */
     private fun aggregate(
         finalCapitals: DoubleArray,
+        sampledPaths: Array<DoubleArray>,
         params: MonteCarloParameters,
         executionTimeMs: Long,
     ): MonteCarloResult {
@@ -135,7 +156,44 @@ class MonteCarloEngine {
             bestCase = percentiles.getValue(95.0),
             meanReal = mean / params.inflationDeflator,
             histogram = Statistics.histogram(finalCapitals, bucketCount = 50),
+            trajectory = buildTrajectory(sampledPaths, params.horizonMonths),
             executionTimeMs = executionTimeMs,
         )
+    }
+
+    /**
+     * Constroi as bandas de percentil mes a mes a partir das trajetorias
+     * amostradas. Para cada mes, ordena os patrimonios da amostra e extrai
+     * P10/P25/P50/P75/P90 - a "abertura do leque" que o fan chart desenha.
+     */
+    private fun buildTrajectory(
+        sampledPaths: Array<DoubleArray>,
+        horizonMonths: Int,
+    ): List<TrajectoryBand> {
+        if (sampledPaths.isEmpty()) return emptyList()
+        val sampleSize = sampledPaths.size
+
+        return (0..horizonMonths).map { month ->
+            // Coluna = patrimonio de cada trajetoria amostrada neste mes.
+            val column = DoubleArray(sampleSize) { i -> sampledPaths[i][month] }
+            column.sort()
+            TrajectoryBand(
+                monthIndex = month,
+                p10 = Statistics.percentileSorted(column, 10.0),
+                p25 = Statistics.percentileSorted(column, 25.0),
+                p50 = Statistics.percentileSorted(column, 50.0),
+                p75 = Statistics.percentileSorted(column, 75.0),
+                p90 = Statistics.percentileSorted(column, 90.0),
+            )
+        }
+    }
+
+    companion object {
+        /**
+         * Numero maximo de trajetorias completas guardadas para o fan chart.
+         * Os percentis estabilizam bem com algumas centenas de amostras, entao
+         * limitamos o uso de memoria/payload independentemente de numSimulations.
+         */
+        const val TRAJECTORY_SAMPLE_SIZE = 500
     }
 }

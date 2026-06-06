@@ -243,4 +243,61 @@ class MonteCarloEngineTest : StringSpec({
             )
         }.isFailure shouldBe true
     }
+
+    "(e) trajetoria do fan chart: horizonte+1 bandas, comeca no capital inicial e e monotonica" {
+        val params = MonteCarloParameters(
+            initialCapital = 10_000.0,
+            monthlyContribution = 1_000.0,
+            expectedReturnAnnual = 0.08,
+            volatilityAnnual = 0.15,
+            horizonMonths = 120,
+            targetAmount = 250_000.0,
+            numSimulations = 2_000,
+            seed = 7L,
+        )
+
+        val result = engine.run(params)
+
+        // Uma banda por mes, incluindo o mes 0 (capital inicial).
+        result.trajectory shouldHaveSize 121
+        result.trajectory.first().monthIndex shouldBe 0
+        result.trajectory.last().monthIndex shouldBe 120
+
+        // No mes 0 todas as trajetorias valem o capital inicial (leque fechado).
+        result.trajectory.first().p10 shouldBe (10_000.0 plusOrMinus 1e-6)
+        result.trajectory.first().p50 shouldBe (10_000.0 plusOrMinus 1e-6)
+        result.trajectory.first().p90 shouldBe (10_000.0 plusOrMinus 1e-6)
+
+        // Em cada mes os percentis sao monotonicamente crescentes.
+        result.trajectory.forEach { band ->
+            band.p10 shouldBeLessThanOrEqualTo band.p25
+            band.p25 shouldBeLessThanOrEqualTo band.p50
+            band.p50 shouldBeLessThanOrEqualTo band.p75
+            band.p75 shouldBeLessThanOrEqualTo band.p90
+        }
+
+        // O leque abre ao longo do tempo: largura P10-P90 no fim > no comeco.
+        val startWidth = result.trajectory.first().let { it.p90 - it.p10 }
+        val endWidth = result.trajectory.last().let { it.p90 - it.p10 }
+        endWidth shouldBeGreaterThan startWidth
+    }
+
+    "(e.2) volatilidade zero colapsa o leque (P10 == P90 em todos os meses)" {
+        val params = MonteCarloParameters(
+            initialCapital = 10_000.0,
+            monthlyContribution = 1_000.0,
+            expectedReturnAnnual = 0.10,
+            volatilityAnnual = 0.0,
+            horizonMonths = 60,
+            targetAmount = 100_000.0,
+            numSimulations = 100,
+            seed = 1L,
+        )
+
+        val result = engine.run(params)
+
+        result.trajectory.forEach { band ->
+            band.p90 shouldBe (band.p10 plusOrMinus 1e-6)
+        }
+    }
 })

@@ -24,6 +24,7 @@ import com.lifeforge.engine.statistics.HistogramBucket
  * @param bestCase melhor cenario (P95)
  * @param meanReal media deflacionada pela inflacao (poder de compra real)
  * @param histogram distribuicao em buckets para visualizacao
+ * @param trajectory bandas de percentil mes a mes (P10..P90) para o fan chart
  * @param executionTimeMs tempo de execucao da simulacao em milissegundos
  */
 data class MonteCarloResult(
@@ -39,6 +40,7 @@ data class MonteCarloResult(
     val bestCase: Double,
     val meanReal: Double,
     val histogram: List<HistogramBucket>,
+    val trajectory: List<TrajectoryBand>,
     val executionTimeMs: Long,
 ) {
     companion object {
@@ -49,3 +51,21 @@ data class MonteCarloResult(
         val DEFAULT_PERCENTILES = listOf(5.0, 10.0, 25.0, 50.0, 75.0, 90.0, 95.0)
     }
 }
+
+/**
+ * Banda de percentis do patrimonio em um instante (mes) da simulacao.
+ *
+ * Usada para desenhar o "fan chart" (gráfico de faixa): a cada mes mostra-se
+ * o intervalo P10-P90 (80% dos cenarios) com a mediana (P50) ao centro,
+ * permitindo visualizar como a incerteza se abre ao longo do tempo.
+ *
+ * @param monthIndex 0 = inicio (capital inicial), 1..horizonte = meses seguintes
+ */
+data class TrajectoryBand(
+    val monthIndex: Int,
+    val p10: Double,
+    val p25: Double,
+    val p50: Double,
+    val p75: Double,
+    val p90: Double,
+)
