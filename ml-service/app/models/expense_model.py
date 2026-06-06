@@ -66,6 +66,8 @@ class ExpenseRandomForestModel(BaseModel):
         self._last_period: pd.Period | None = None
         # Lag state por categoria: ultimo valor e media dos 3 ultimos
         self._lag_state: dict[str, dict[str, float]] = {}
+        # Categorias que o usuario realmente possui no historico (preenchido no fit)
+        self._user_categories: list[str] = []
 
     # ------------------------------------------------------------------
     # Fit
@@ -131,6 +133,12 @@ class ExpenseRandomForestModel(BaseModel):
         self._last_period = monthly["period"].max()
         self._lag_state = self._compute_lag_state(monthly)
 
+        # Apenas as categorias com historico real entram na previsao. Prever
+        # categorias sem historico inflava o total: com lag1=0 (fora do range
+        # de treino) e o one-hot sem variancia, o RF preditava ~o nivel medio
+        # do usuario para CADA categoria nao usada, multiplicando a despesa.
+        self._user_categories = sorted(monthly["category"].unique().tolist())
+
         self._mark_fitted(metrics)
 
     # ------------------------------------------------------------------
@@ -161,7 +169,8 @@ class ExpenseRandomForestModel(BaseModel):
             sin_v, cos_v = cyclic_month_features(future_period.month)
 
             rows = []
-            cats = list(KNOWN_CATEGORIES)
+            # So preve categorias que o usuario tem; evita inflar o total.
+            cats = self._user_categories or list(KNOWN_CATEGORIES)
             for cat in cats:
                 state = lag_state.get(cat, {"lag1": 0.0, "lag3_avg": 0.0, "recurring_share": 0.0})
                 feats = [sin_v, cos_v] + _one_hot(cat) + [
