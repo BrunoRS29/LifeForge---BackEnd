@@ -1,6 +1,7 @@
 package com.lifeforge.plugins
 
 import com.lifeforge.config.AppContainer
+import com.lifeforge.routes.apiDocsRoutes
 import com.lifeforge.routes.assetRoutes
 import com.lifeforge.routes.authRoutes
 import com.lifeforge.routes.expenseRoutes
@@ -41,6 +42,9 @@ fun Application.configureRouting(container: AppContainer) {
                 )
             )
         }
+
+        // Documentacao OpenAPI/Swagger (publico): GET /docs e /openapi.yaml
+        apiDocsRoutes()
 
         // Auth (publico)
         authRoutes(container.userRepository, container.jwtService)

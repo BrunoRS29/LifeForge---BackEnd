@@ -1,0 +1,885 @@
+openapi: 3.0.3
+info:
+  title: LifeForge API
+  description: >
+    API REST do LifeForge - plataforma de planejamento de vida com modelagem
+    probabilistica e simulacao de Monte Carlo. Backend Ktor (Kotlin) com
+    persistencia PostgreSQL e microsservico Python de ML para predicoes.
+
+    Autenticacao: a maioria dos endpoints exige um JWT no header
+    `Authorization: Bearer <token>`, obtido em `/api/v1/auth/login`.
+  version: 0.1.0
+  contact:
+    name: LifeForge (TCC - Engenharia de Computacao)
+
+servers:
+  - url: http://localhost:8080
+    description: Ambiente local (Docker Compose)
+
+tags:
+  - name: System
+    description: Healthcheck e metadados
+  - name: Auth
+    description: Registro e login (publicos)
+  - name: Goals
+    description: Metas financeiras do usuario
+  - name: Finance
+    description: Receitas, despesas e ativos
+  - name: Simulation
+    description: Simulacao de Monte Carlo (classica e calibrada por IA)
+  - name: Optimization
+    description: Otimizacao de aporte, prazo e alocacao
+  - name: Predictions
+    description: Predicoes do microsservico de ML (renda, despesas, patrimonio)
+
+paths:
+  /health:
+    get:
+      tags: [System]
+      summary: Healthcheck do backend e do microsservico ML
+      security: []
+      responses:
+        "200":
+          description: Servico no ar
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: ok }
+                  service: { type: string, example: lifeforge-backend }
+                  ml: { type: string, example: ok }
+
+  /api/v1/auth/register:
+    post:
+      tags: [Auth]
+      summary: Registra um novo usuario e retorna o JWT
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+      responses:
+        "201":
+          description: Usuario criado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuthResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "409":
+          description: Email ja cadastrado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /api/v1/auth/login:
+    post:
+      tags: [Auth]
+      summary: Autentica e retorna o JWT
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LoginRequest" }
+      responses:
+        "200":
+          description: Autenticado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuthResponse" }
+        "401":
+          description: Credenciais invalidas
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /api/v1/goals:
+    get:
+      tags: [Goals]
+      summary: Lista as metas do usuario autenticado
+      responses:
+        "200":
+          description: Lista de metas
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/GoalDto" }
+    post:
+      tags: [Goals]
+      summary: Cria uma nova meta
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/GoalRequest" }
+      responses:
+        "201":
+          description: Meta criada
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GoalDto" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+
+  /api/v1/goals/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    get:
+      tags: [Goals]
+      summary: Recupera uma meta por id
+      responses:
+        "200":
+          description: Meta
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GoalDto" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [Goals]
+      summary: Atualiza uma meta
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/GoalRequest" }
+      responses:
+        "200":
+          description: Meta atualizada
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GoalDto" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [Goals]
+      summary: Remove uma meta
+      responses:
+        "204": { description: Removida }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/incomes:
+    get:
+      tags: [Finance]
+      summary: Lista receitas do usuario
+      responses:
+        "200":
+          description: Lista de receitas
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/IncomeDto" }
+    post:
+      tags: [Finance]
+      summary: Cria uma receita (pontual; use /schedules para recorrencia)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/IncomeRequest" }
+      responses:
+        "201":
+          description: Receita criada
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IncomeDto" }
+
+  /api/v1/incomes/schedules:
+    post:
+      tags: [Finance]
+      summary: Cria um agendamento recorrente/parcelado e materializa as ocorrencias
+      description: >
+        Registra UMA recorrencia (MONTHLY) ou parcelamento (INSTALLMENTS) e gera
+        automaticamente os lancamentos de receita correspondentes (retroativos
+        para alimentar o ML e futuros para projecao).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/IncomeScheduleRequest" }
+      responses:
+        "201":
+          description: Agendamento criado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IncomeScheduleDto" }
+
+  /api/v1/expenses:
+    get:
+      tags: [Finance]
+      summary: Lista despesas do usuario
+      responses:
+        "200":
+          description: Lista de despesas
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ExpenseDto" }
+    post:
+      tags: [Finance]
+      summary: Cria uma despesa (pontual; use /schedules para recorrencia)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ExpenseRequest" }
+      responses:
+        "201":
+          description: Despesa criada
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ExpenseDto" }
+
+  /api/v1/assets:
+    get:
+      tags: [Finance]
+      summary: Lista ativos do usuario
+      responses:
+        "200":
+          description: Lista de ativos
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AssetDto" }
+    post:
+      tags: [Finance]
+      summary: Cria um ativo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AssetRequest" }
+      responses:
+        "201":
+          description: Ativo criado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetDto" }
+
+  /api/v1/simulation/run:
+    post:
+      tags: [Simulation]
+      summary: Executa uma simulacao de Monte Carlo (>= 10.000 cenarios)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RunSimulationRequest" }
+      responses:
+        "201":
+          description: Resultado da simulacao
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SimulationResultResponse" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/simulation/run-calibrated:
+    post:
+      tags: [Simulation]
+      summary: Executa Monte Carlo com aporte calibrado pelas predicoes de IA
+      description: >
+        Diferente de /run, o aporte mensal NAO e informado: e derivado das
+        predicoes de renda e despesa do usuario (renda projetada - despesa
+        projetada). A resposta inclui o sumario da calibracao.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RunCalibratedSimulationRequest" }
+      responses:
+        "201":
+          description: Resultado + sumario de calibracao
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RunCalibratedSimulationResponse" }
+        "422": { $ref: "#/components/responses/MlValidationError" }
+        "503": { description: Microsservico de ML indisponivel }
+
+  /api/v1/simulation/{id}:
+    get:
+      tags: [Simulation]
+      summary: Recupera o resultado completo de uma simulacao
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer, format: int64 }
+      responses:
+        "200":
+          description: Resultado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SimulationResultResponse" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/simulation/by-goal/{goalId}:
+    get:
+      tags: [Simulation]
+      summary: Lista (resumo) das simulacoes de uma meta
+      parameters:
+        - name: goalId
+          in: path
+          required: true
+          schema: { type: integer, format: int64 }
+      responses:
+        "200":
+          description: Resumos
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/SimulationSummaryResponse" }
+
+  /api/v1/optimize/contribution:
+    post:
+      tags: [Optimization]
+      summary: Aporte mensal minimo para atingir a meta com a probabilidade alvo
+      description: Busca binaria combinada com Monte Carlo.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OptimizeContributionRequest" }
+      responses:
+        "200":
+          description: Resultado da otimizacao
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OptimizationResponse" }
+
+  /api/v1/optimize/horizon:
+    post:
+      tags: [Optimization]
+      summary: Prazo minimo (meses) para a meta mantendo o aporte atual
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OptimizeHorizonRequest" }
+      responses:
+        "200":
+          description: Resultado da otimizacao
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OptimizationResponse" }
+
+  /api/v1/optimize/rebalance:
+    post:
+      tags: [Optimization]
+      summary: Alocacao recomendada de carteira dado o perfil de risco
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RebalanceRequest" }
+      responses:
+        "200":
+          description: Pesos e metricas recomendadas
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RebalanceResponse" }
+
+  /api/v1/predictions/income:
+    post:
+      tags: [Predictions]
+      summary: Predicao de renda (regressao linear) e persistencia
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                horizonMonths: { type: integer, minimum: 1, maximum: 60, example: 12 }
+      responses:
+        "201":
+          description: Predicao de renda
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PredictIncomeResponse" }
+        "422": { $ref: "#/components/responses/MlValidationError" }
+
+  /api/v1/predictions/expenses:
+    post:
+      tags: [Predictions]
+      summary: Predicao de despesas por categoria (Random Forest)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                horizonMonths: { type: integer, minimum: 1, maximum: 12, example: 1 }
+      responses:
+        "201":
+          description: Predicao de despesas
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PredictExpensesResponse" }
+        "422": { $ref: "#/components/responses/MlValidationError" }
+
+  /api/v1/predictions/wealth:
+    post:
+      tags: [Predictions]
+      summary: Predicao de patrimonio (serie temporal ARIMA)
+      description: >
+        Reconstroi a serie mensal de patrimonio a partir do historico de
+        receitas/despesas/ativos e projeta a tendencia futura com um modelo
+        de serie temporal (ARIMA com fallback de tendencia linear).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                horizonMonths: { type: integer, minimum: 1, maximum: 60, example: 12 }
+      responses:
+        "201":
+          description: Predicao de patrimonio
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PredictWealthResponse" }
+        "422": { $ref: "#/components/responses/MlValidationError" }
+
+  /api/v1/predictions:
+    get:
+      tags: [Predictions]
+      summary: Lista as predicoes recentes do usuario (auditoria)
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+      responses:
+        "200":
+          description: Predicoes recentes
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/PredictionSummaryResponse" }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  responses:
+    ValidationError:
+      description: Erro de validacao
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+    NotFound:
+      description: Recurso nao encontrado
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+    MlValidationError:
+      description: Dados insuficientes/invalidos para o modelo de ML
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        code: { type: string, example: VALIDATION }
+        message: { type: string, example: Dados invalidos }
+
+    RegisterRequest:
+      type: object
+      required: [email, name, password]
+      properties:
+        email: { type: string, example: user@example.com }
+        name: { type: string, example: Gabriel }
+        password: { type: string, minLength: 8, example: senha1234 }
+        riskProfile:
+          type: string
+          enum: [CONSERVATIVE, MODERATE, AGGRESSIVE]
+          default: MODERATE
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, example: user@example.com }
+        password: { type: string, example: senha1234 }
+
+    AuthResponse:
+      type: object
+      properties:
+        token: { type: string, description: JWT }
+        user: { $ref: "#/components/schemas/UserDto" }
+
+    UserDto:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        email: { type: string }
+        name: { type: string }
+        riskProfile: { type: string, enum: [CONSERVATIVE, MODERATE, AGGRESSIVE] }
+        createdAt: { type: string, format: date-time }
+
+    GoalRequest:
+      type: object
+      required: [name, category, targetAmount, targetDate]
+      properties:
+        name: { type: string, example: Aposentadoria }
+        category:
+          type: string
+          enum: [RETIREMENT, REAL_ESTATE, FINANCIAL_INDEPENDENCE, EDUCATION, TRAVEL, CUSTOM]
+        targetAmount: { type: string, example: "1000000.00" }
+        targetDate: { type: string, format: date-time }
+        priority: { type: integer, default: 1 }
+
+    GoalDto:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        userId: { type: integer, format: int64 }
+        name: { type: string }
+        category: { type: string }
+        targetAmount: { type: string }
+        targetDate: { type: string, format: date-time }
+        priority: { type: integer }
+        createdAt: { type: string, format: date-time }
+
+    IncomeRequest:
+      type: object
+      required: [amount, incomeType, receivedAt]
+      properties:
+        amount: { type: string, example: "5000.00" }
+        incomeType: { type: string, example: SALARY }
+        receivedAt: { type: string, format: date-time }
+        recurring: { type: boolean, default: false }
+
+    IncomeDto:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        amount: { type: string }
+        incomeType: { type: string }
+        receivedAt: { type: string, format: date-time }
+        recurring: { type: boolean }
+        scheduleId: { type: integer, format: int64, nullable: true }
+
+    IncomeScheduleRequest:
+      type: object
+      required: [amount, incomeType, startDate, recurrenceType]
+      properties:
+        amount: { type: string, example: "5000.00" }
+        incomeType: { type: string, example: SALARY }
+        startDate: { type: string, format: date-time }
+        recurrenceType: { type: string, enum: [MONTHLY, INSTALLMENTS] }
+        endDate: { type: string, format: date-time, nullable: true }
+        installments: { type: integer, nullable: true }
+
+    IncomeScheduleDto:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        amount: { type: string }
+        incomeType: { type: string }
+        startDate: { type: string, format: date-time }
+        recurrenceType: { type: string }
+        generatedCount: { type: integer }
+
+    ExpenseRequest:
+      type: object
+      required: [amount, category, spentAt]
+      properties:
+        amount: { type: string, example: "1500.00" }
+        category: { type: string, example: HOUSING }
+        spentAt: { type: string, format: date-time }
+        recurring: { type: boolean, default: false }
+
+    ExpenseDto:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        amount: { type: string }
+        category: { type: string }
+        spentAt: { type: string, format: date-time }
+        recurring: { type: boolean }
+        scheduleId: { type: integer, format: int64, nullable: true }
+
+    AssetRequest:
+      type: object
+      required: [assetType, value]
+      properties:
+        assetType: { type: string, example: STOCKS }
+        value: { type: string, example: "20000.00" }
+        expectedReturnAnnual: { type: number, format: double, example: 0.08 }
+        volatilityAnnual: { type: number, format: double, example: 0.15 }
+
+    AssetDto:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        assetType: { type: string }
+        value: { type: string }
+        expectedReturnAnnual: { type: number, format: double }
+        volatilityAnnual: { type: number, format: double }
+
+    RunSimulationRequest:
+      type: object
+      required: [goalId, initialCapital, monthlyContribution, expectedReturnAnnual, volatilityAnnual, horizonMonths, targetAmount]
+      properties:
+        goalId: { type: string, example: "1" }
+        initialCapital: { type: number, format: double, example: 50000 }
+        monthlyContribution: { type: number, format: double, example: 2000 }
+        expectedReturnAnnual: { type: number, format: double, example: 0.08 }
+        volatilityAnnual: { type: number, format: double, example: 0.15 }
+        horizonMonths: { type: integer, example: 240 }
+        targetAmount: { type: number, format: double, example: 1000000 }
+        unemploymentProbAnnual: { type: number, format: double, default: 0.0 }
+        unemploymentDurationMonths: { type: integer, default: 6 }
+        inflationAnnual: { type: number, format: double, default: 0.0 }
+        numSimulations: { type: integer, default: 10000, minimum: 10000 }
+        seed: { type: integer, format: int64, nullable: true }
+
+    RunCalibratedSimulationRequest:
+      type: object
+      required: [goalId, initialCapital, expectedReturnAnnual, volatilityAnnual, horizonMonths, targetAmount]
+      properties:
+        goalId: { type: string, example: "1" }
+        initialCapital: { type: number, format: double, example: 50000 }
+        expectedReturnAnnual: { type: number, format: double, example: 0.08 }
+        volatilityAnnual: { type: number, format: double, example: 0.15 }
+        horizonMonths: { type: integer, example: 240 }
+        targetAmount: { type: number, format: double, example: 1000000 }
+        unemploymentProbAnnual: { type: number, format: double, default: 0.0 }
+        inflationAnnual: { type: number, format: double, default: 0.0 }
+        numSimulations: { type: integer, default: 10000 }
+        incomeHorizonMonths: { type: integer, default: 12 }
+
+    TrajectoryBandDto:
+      type: object
+      description: Banda de percentis do patrimonio em um mes (fan chart)
+      properties:
+        monthIndex: { type: integer }
+        p10: { type: number, format: double }
+        p25: { type: number, format: double }
+        p50: { type: number, format: double }
+        p75: { type: number, format: double }
+        p90: { type: number, format: double }
+
+    HistogramBucketDto:
+      type: object
+      properties:
+        rangeStart: { type: number, format: double }
+        rangeEnd: { type: number, format: double }
+        count: { type: integer }
+
+    SimulationResultResponse:
+      type: object
+      properties:
+        id: { type: string }
+        goalId: { type: string }
+        numSimulations: { type: integer }
+        seed: { type: integer, format: int64 }
+        targetAmount: { type: number, format: double }
+        successProbability: { type: number, format: double, description: "Fracao em [0,1]" }
+        mean: { type: number, format: double }
+        median: { type: number, format: double }
+        standardDeviation: { type: number, format: double }
+        percentiles:
+          type: object
+          additionalProperties: { type: number, format: double }
+          example: { P5: 120000, P50: 480000, P95: 1300000 }
+        worstCase: { type: number, format: double }
+        bestCase: { type: number, format: double }
+        meanReal: { type: number, format: double }
+        histogram:
+          type: array
+          items: { $ref: "#/components/schemas/HistogramBucketDto" }
+        trajectory:
+          type: array
+          items: { $ref: "#/components/schemas/TrajectoryBandDto" }
+        executionTimeMs: { type: integer, format: int64 }
+        createdAt: { type: string, format: date-time }
+
+    SimulationSummaryResponse:
+      type: object
+      properties:
+        id: { type: string }
+        goalId: { type: string }
+        successProbability: { type: number, format: double }
+        mean: { type: number, format: double }
+        median: { type: number, format: double }
+        targetAmount: { type: number, format: double }
+        createdAt: { type: string, format: date-time }
+
+    CalibrationSummaryResponse:
+      type: object
+      properties:
+        incomePredictionId: { type: integer, format: int64 }
+        expensePredictionId: { type: integer, format: int64 }
+        predictedMonthlyIncome: { type: number, format: double }
+        predictedMonthlyExpense: { type: number, format: double }
+        rawMonthlyContribution: { type: number, format: double }
+        appliedMonthlyContribution: { type: number, format: double }
+        appliedVolatilityAnnual: { type: number, format: double }
+
+    RunCalibratedSimulationResponse:
+      type: object
+      properties:
+        simulation: { $ref: "#/components/schemas/SimulationResultResponse" }
+        calibration: { $ref: "#/components/schemas/CalibrationSummaryResponse" }
+
+    OptimizeContributionRequest:
+      type: object
+      required: [initialCapital, expectedReturnAnnual, volatilityAnnual, horizonMonths, targetAmount, targetSuccessProbability]
+      properties:
+        goalId: { type: string, nullable: true }
+        initialCapital: { type: number, format: double }
+        expectedReturnAnnual: { type: number, format: double }
+        volatilityAnnual: { type: number, format: double }
+        horizonMonths: { type: integer }
+        targetAmount: { type: number, format: double }
+        targetSuccessProbability: { type: number, format: double, example: 0.8 }
+        maxContribution: { type: number, format: double, nullable: true }
+
+    OptimizeHorizonRequest:
+      type: object
+      required: [initialCapital, expectedReturnAnnual, volatilityAnnual, monthlyContribution, targetAmount, targetSuccessProbability, maxHorizonMonths]
+      properties:
+        goalId: { type: string, nullable: true }
+        initialCapital: { type: number, format: double }
+        expectedReturnAnnual: { type: number, format: double }
+        volatilityAnnual: { type: number, format: double }
+        monthlyContribution: { type: number, format: double }
+        targetAmount: { type: number, format: double }
+        targetSuccessProbability: { type: number, format: double, example: 0.8 }
+        maxHorizonMonths: { type: integer, example: 600 }
+
+    OptimizationResponse:
+      type: object
+      properties:
+        type: { type: string, example: CONTRIBUTION }
+        feasible: { type: boolean }
+        optimalValue: { type: number, format: double }
+        achievedProbability: { type: number, format: double }
+        targetProbability: { type: number, format: double }
+        terminationReason: { type: string }
+        executionTimeMs: { type: integer, format: int64 }
+        seed: { type: integer, format: int64 }
+
+    RebalanceRequest:
+      type: object
+      required: [riskProfile, currentCapital, targetAmount, monthsToGoal]
+      properties:
+        riskProfile: { type: string, enum: [CONSERVATIVE, MODERATE, AGGRESSIVE] }
+        currentCapital: { type: number, format: double }
+        targetAmount: { type: number, format: double }
+        monthsToGoal: { type: integer }
+
+    RebalanceResponse:
+      type: object
+      properties:
+        weights:
+          type: object
+          additionalProperties: { type: number, format: double }
+        expectedReturnAnnual: { type: number, format: double }
+        volatilityAnnual: { type: number, format: double }
+        riskScore: { type: number, format: double }
+        rationale: { type: string }
+
+    ModelMetrics:
+      type: object
+      properties:
+        mae: { type: number, format: double }
+        rmse: { type: number, format: double }
+        r2: { type: number, format: double }
+
+    PredictIncomeResponse:
+      type: object
+      properties:
+        predictionId: { type: integer, format: int64 }
+        modelName: { type: string, example: INCOME_REGRESSION }
+        horizonMonths: { type: integer }
+        projection:
+          type: array
+          items:
+            type: object
+            properties:
+              monthIndex: { type: integer }
+              predictedAmount: { type: number, format: double }
+        expectedMonthlyIncome: { type: number, format: double }
+        annualGrowthRate: { type: number, format: double }
+        residualVolatilityMonthly: { type: number, format: double }
+        mae: { type: number, format: double }
+        rmse: { type: number, format: double }
+        r2: { type: number, format: double }
+        createdAt: { type: string, format: date-time }
+
+    PredictExpensesResponse:
+      type: object
+      properties:
+        predictionId: { type: integer, format: int64 }
+        modelName: { type: string, example: EXPENSE_RANDOM_FOREST }
+        horizonMonths: { type: integer }
+        byCategory:
+          type: array
+          items:
+            type: object
+            properties:
+              category: { type: string }
+              predictedAmount: { type: number, format: double }
+        expectedMonthlyExpense: { type: number, format: double }
+        mae: { type: number, format: double }
+        rmse: { type: number, format: double }
+        r2: { type: number, format: double }
+        createdAt: { type: string, format: date-time }
+
+    PredictWealthResponse:
+      type: object
+      properties:
+        predictionId: { type: integer, format: int64 }
+        modelName: { type: string, example: WEALTH_ARIMA }
+        horizonMonths: { type: integer }
+        history:
+          type: array
+          description: Serie mensal de patrimonio reconstruida (real)
+          items:
+            type: object
+            properties:
+              monthIndex: { type: integer }
+              amount: { type: number, format: double }
+        projection:
+          type: array
+          description: Patrimonio projetado mes a mes
+          items:
+            type: object
+            properties:
+              monthIndex: { type: integer }
+              predictedAmount: { type: number, format: double }
+        expectedFinalWealth: { type: number, format: double }
+        monthlyGrowthRate: { type: number, format: double }
+        mae: { type: number, format: double }
+        rmse: { type: number, format: double }
+        r2: { type: number, format: double }
+        createdAt: { type: string, format: date-time }
+
+    PredictionSummaryResponse:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        modelName: { type: string }
+        errorMetric: { type: number, format: double, nullable: true }
+        createdAt: { type: string, format: date-time }
+
+security:
+  - bearerAuth: []
