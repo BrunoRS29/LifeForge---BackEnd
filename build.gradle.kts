@@ -18,6 +18,7 @@ plugins {
     kotlin("plugin.serialization") version "2.0.21"
     id("io.ktor.plugin") version "3.0.0"
     application
+    jacoco
 }
 
 group = "com.lifeforge"
@@ -104,6 +105,22 @@ tasks.withType<KotlinCompile> {
 
 tasks.test {
     useJUnitPlatform()
+    // Gera o relatorio de cobertura (JaCoCo) ao final dos testes - criterio
+    // 12.3 do TCC (cobertura > 70% no motor de simulacao).
+    finalizedBy(tasks.jacocoTestReport)
+}
+
+jacoco {
+    toolVersion = "0.8.12"
+}
+
+tasks.jacocoTestReport {
+    dependsOn(tasks.test)
+    reports {
+        xml.required.set(true)
+        csv.required.set(true)
+        html.required.set(true)
+    }
 }
 
 ktor {
