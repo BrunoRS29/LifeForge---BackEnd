@@ -25,6 +25,12 @@ pelo microsserviço de IA com o histórico do próprio usuário.
 parâmetros (retorno, volatilidade, inflação, crescimento salarial, prob. de
 desemprego e duração) para alimentar a engine.
 
+O **choque de despesa inesperada** é aplicado mês a mês pela `MonteCarloEngine`:
+o número de eventos no mês segue `Poisson(λ/12)` e a magnitude de cada evento
+segue `Exponencial(média)`, com `média = unexpectedExpenseMeanFractionOfIncome ×
+renda mensal prevista`. É ligado automaticamente na rota calibrada
+(`/simulation/run-calibrated`); na rota clássica permanece desativado (λ = 0).
+
 ## Valores atuais
 
 ### Economia

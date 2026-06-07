@@ -107,9 +107,14 @@ fun Route.simulationCalibratedRoutes(
                 val riskProfile = userRepository.findById(userId)?.riskProfile
                 val employmentType = userProfileRepository.get(userId)?.employmentType()
                 val preset = ReferenceData.presetFor(riskProfile, employmentType)
+                // Choque de despesa inesperada (Proposta 6.2): frequencia vem da
+                // base; a magnitude media e uma fracao da renda mensal prevista.
                 val baseParams = request.toBaseParameters(
                     preset = preset,
                     seed = request.seed ?: System.currentTimeMillis(),
+                    unexpectedExpenseAnnualFrequency = ReferenceData.unexpectedExpenseAnnualFrequency,
+                    unexpectedExpenseMeanAmount = ReferenceData.unexpectedExpenseMeanFractionOfIncome *
+                        incomeOutcome.response.expectedMonthlyIncome,
                 )
 
                 // 4. Calibracao
@@ -141,6 +146,8 @@ fun Route.simulationCalibratedRoutes(
                     put("unemploymentProbAnnual", calibration.parameters.unemploymentProbAnnual)
                     put("unemploymentDurationMonths", calibration.parameters.unemploymentDurationMonths)
                     put("inflationAnnual", calibration.parameters.inflationAnnual)
+                    put("unexpectedExpenseAnnualFrequency", calibration.parameters.unexpectedExpenseAnnualFrequency)
+                    put("unexpectedExpenseMeanAmount", calibration.parameters.unexpectedExpenseMeanAmount)
                     put("numSimulations", calibration.parameters.numSimulations)
                     put("seed", calibration.parameters.seed)
                     // referencias as predicoes que originaram a calibracao
@@ -232,6 +239,8 @@ private fun JsonElement.employmentType(): String? =
 internal fun RunCalibratedSimulationRequest.toBaseParameters(
     preset: ReferenceData.CalibrationPreset,
     seed: Long,
+    unexpectedExpenseAnnualFrequency: Double = 0.0,
+    unexpectedExpenseMeanAmount: Double = 0.0,
 ): MonteCarloParameters = MonteCarloParameters(
     initialCapital = initialCapital,
     monthlyContribution = 0.0,  // sera sobrescrito pela calibracao
@@ -244,6 +253,8 @@ internal fun RunCalibratedSimulationRequest.toBaseParameters(
     inflationAnnual = inflationAnnual ?: preset.inflationAnnual,
     numSimulations = numSimulations,
     seed = seed,
+    unexpectedExpenseAnnualFrequency = unexpectedExpenseAnnualFrequency,
+    unexpectedExpenseMeanAmount = unexpectedExpenseMeanAmount,
 )
 
 /**

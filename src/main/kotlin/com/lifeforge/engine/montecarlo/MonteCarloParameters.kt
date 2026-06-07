@@ -21,6 +21,10 @@ import kotlin.math.sqrt
  * @param inflationAnnual inflacao anual para deflacionar resultado (default: 0)
  * @param numSimulations quantidade de cenarios a simular (default: 10_000, minimo do TCC)
  * @param seed semente para reprodutibilidade (default: timestamp atual)
+ * @param unexpectedExpenseAnnualFrequency frequencia anual de despesas inesperadas
+ *   (lambda de Poisson). 0 desativa o choque (default).
+ * @param unexpectedExpenseMeanAmount magnitude media (R$) de cada despesa
+ *   inesperada (media da Exponencial). 0 desativa o choque (default).
  */
 data class MonteCarloParameters(
     val initialCapital: Double,
@@ -34,6 +38,8 @@ data class MonteCarloParameters(
     val inflationAnnual: Double = 0.0,
     val numSimulations: Int = 10_000,
     val seed: Long = System.currentTimeMillis(),
+    val unexpectedExpenseAnnualFrequency: Double = 0.0,
+    val unexpectedExpenseMeanAmount: Double = 0.0,
 ) {
     init {
         require(initialCapital >= 0.0) { "initialCapital deve ser >= 0" }
@@ -48,6 +54,12 @@ data class MonteCarloParameters(
             "unemploymentDurationMonths deve ser >= 0"
         }
         require(numSimulations > 0) { "numSimulations deve ser > 0" }
+        require(unexpectedExpenseAnnualFrequency >= 0.0) {
+            "unexpectedExpenseAnnualFrequency deve ser >= 0"
+        }
+        require(unexpectedExpenseMeanAmount >= 0.0) {
+            "unexpectedExpenseMeanAmount deve ser >= 0"
+        }
     }
 
     // Conversoes anual -> mensal usadas pela engine.
@@ -80,4 +92,11 @@ data class MonteCarloParameters(
      */
     val inflationDeflator: Double
         get() = (1.0 + inflationAnnual).pow(horizonMonths / 12.0)
+
+    /**
+     * Frequencia mensal de despesas inesperadas (lambda mensal de Poisson),
+     * a partir da anual. Formula: lambda_m = lambda_a / 12.
+     */
+    val unexpectedExpenseMonthlyFrequency: Double
+        get() = unexpectedExpenseAnnualFrequency / 12.0
 }

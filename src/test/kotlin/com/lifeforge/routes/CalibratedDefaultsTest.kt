@@ -70,4 +70,25 @@ class CalibratedDefaultsTest : StringSpec({
         params.volatilityAnnual shouldBe preset.volatilityAnnual
         params.unemploymentProbAnnual shouldBe ReferenceData.DEFAULT_UNEMPLOYMENT_PROB_ANNUAL
     }
+
+    "parametros do choque de despesa sao repassados para a engine" {
+        val preset = ReferenceData.presetFor(RiskProfile.MODERATE, "CLT")
+        val params = request().toBaseParameters(
+            preset = preset,
+            seed = 1L,
+            unexpectedExpenseAnnualFrequency = 1.5,
+            unexpectedExpenseMeanAmount = 2_500.0,
+        )
+
+        params.unexpectedExpenseAnnualFrequency shouldBe 1.5
+        params.unexpectedExpenseMeanAmount shouldBe 2_500.0
+    }
+
+    "choque desativado por padrao quando o helper nao recebe os parametros" {
+        val preset = ReferenceData.presetFor(RiskProfile.MODERATE, "CLT")
+        val params = request().toBaseParameters(preset, seed = 1L)
+
+        params.unexpectedExpenseAnnualFrequency shouldBe 0.0
+        params.unexpectedExpenseMeanAmount shouldBe 0.0
+    }
 })

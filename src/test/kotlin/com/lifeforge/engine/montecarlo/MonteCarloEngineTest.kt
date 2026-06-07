@@ -52,6 +52,53 @@ class MonteCarloEngineTest : StringSpec({
         result.percentiles[95.0]!! shouldBe (expected plusOrMinus 0.5)
     }
 
+    "(e) choque de despesa inesperada reduz o patrimonio medio final" {
+        // Mesma config base; a unica diferenca e ligar o choque de despesa
+        // (Poisson + Exponencial). Como o choque so retira dinheiro, o
+        // patrimonio medio com choque deve ser menor que sem choque.
+        val base = MonteCarloParameters(
+            initialCapital = 10_000.0,
+            monthlyContribution = 1_000.0,
+            expectedReturnAnnual = 0.10,
+            volatilityAnnual = 0.15,
+            horizonMonths = 120,
+            targetAmount = 250_000.0,
+            numSimulations = 5_000,
+            seed = 7L,
+        )
+        val comChoque = base.copy(
+            unexpectedExpenseAnnualFrequency = 1.5,
+            unexpectedExpenseMeanAmount = 3_000.0,
+        )
+
+        val semChoque = engine.run(base)
+        val resultadoComChoque = engine.run(comChoque)
+
+        resultadoComChoque.mean shouldBeLessThan semChoque.mean
+        resultadoComChoque.successProbability shouldBeGreaterThanOrEqualTo 0.0
+        resultadoComChoque.successProbability shouldBeLessThanOrEqualTo 1.0
+    }
+
+    "(f) choque desativado (frequencia/magnitude zero) nao altera o resultado" {
+        val params = MonteCarloParameters(
+            initialCapital = 10_000.0,
+            monthlyContribution = 1_000.0,
+            expectedReturnAnnual = 0.08,
+            volatilityAnnual = 0.12,
+            horizonMonths = 120,
+            targetAmount = 250_000.0,
+            numSimulations = 2_000,
+            seed = 99L,
+        )
+        // Default (sem choque) vs. explicitamente zerado: random stream
+        // identico (nenhum sorteio extra), entao a media e exatamente igual.
+        val zerado = params.copy(
+            unexpectedExpenseAnnualFrequency = 0.0,
+            unexpectedExpenseMeanAmount = 0.0,
+        )
+        engine.run(params).mean shouldBe engine.run(zerado).mean
+    }
+
     "(b) mesma seed produz exatamente o mesmo resultado (reprodutibilidade)" {
         val params = MonteCarloParameters(
             initialCapital = 50_000.0,

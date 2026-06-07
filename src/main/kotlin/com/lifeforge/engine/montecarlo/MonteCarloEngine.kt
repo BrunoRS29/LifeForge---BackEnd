@@ -1,7 +1,9 @@
 package com.lifeforge.engine.montecarlo
 
 import com.lifeforge.engine.statistics.RandomGenerators.nextBernoulli
+import com.lifeforge.engine.statistics.RandomGenerators.nextExponential
 import com.lifeforge.engine.statistics.RandomGenerators.nextNormal
+import com.lifeforge.engine.statistics.RandomGenerators.nextPoisson
 import com.lifeforge.engine.statistics.Statistics
 import kotlin.random.Random
 import kotlin.system.measureTimeMillis
@@ -14,6 +16,8 @@ import kotlin.system.measureTimeMillis
  *
  *  - retorno mensal da carteira: amostrado de Normal(media, desvio)
  *  - evento de desemprego: amostrado de Bernoulli(prob_mensal) a cada mes
+ *  - despesa inesperada: numero de eventos/mes ~ Poisson(lambda_mensal) e
+ *    magnitude de cada evento ~ Exponencial(media) (Proposta, Secao 6.2)
  *
  * Modelo matematico (formula determinstica subjacente):
  *
@@ -85,6 +89,9 @@ class MonteCarloEngine {
         val expectedReturnMonthly = params.expectedReturnMonthly
         val volatilityMonthly = params.volatilityMonthly
         val unemploymentProbMonthly = params.unemploymentProbMonthly
+        val shockMonthlyLambda = params.unexpectedExpenseMonthlyFrequency
+        val shockMeanAmount = params.unexpectedExpenseMeanAmount
+        val shocksEnabled = shockMonthlyLambda > 0.0 && shockMeanAmount > 0.0
 
         for (month in 0 until params.horizonMonths) {
             // 1. Sorteia retorno do mes (Normal).
@@ -108,6 +115,20 @@ class MonteCarloEngine {
             // 4. Atualiza patrimonio segundo a recorrencia P(t+1) = P(t)*(1+r) + A
             //    O retorno incide sobre o capital existente, depois adiciona o aporte.
             capital = capital * (1.0 + monthlyReturn) + contribution
+
+            // 4b. Choque de despesa inesperada (Proposta 6.2): o numero de eventos
+            //     no mes ~ Poisson(lambda_mensal) e cada evento custa ~ Exponencial(
+            //     media). E uma saida de caixa, entao subtrai do patrimonio.
+            if (shocksEnabled) {
+                val numShocks = random.nextPoisson(shockMonthlyLambda)
+                if (numShocks > 0) {
+                    var shockTotal = 0.0
+                    repeat(numShocks) {
+                        shockTotal += random.nextExponential(1.0 / shockMeanAmount)
+                    }
+                    capital -= shockTotal
+                }
+            }
 
             // 5. Garante que o patrimonio nao fique negativo (limite de ruina).
             //    Se cair a zero (drawdown extremo), permanece em zero ate aporte futuro.
