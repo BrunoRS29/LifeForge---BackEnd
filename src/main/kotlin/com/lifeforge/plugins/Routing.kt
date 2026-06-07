@@ -11,6 +11,7 @@ import com.lifeforge.routes.incomeRoutes
 import com.lifeforge.routes.optimizationRoutes
 import com.lifeforge.routes.predictionRoutes
 import com.lifeforge.routes.profileRoutes
+import com.lifeforge.routes.referenceRoutes
 import com.lifeforge.routes.simulationCalibratedRoutes
 import com.lifeforge.routes.simulationRoutes
 import com.lifeforge.routes.userRoutes
@@ -47,6 +48,9 @@ fun Application.configureRouting(container: AppContainer) {
 
         // Documentacao OpenAPI/Swagger (publico): GET /docs e /openapi.yaml
         apiDocsRoutes()
+
+        // Base de estatisticas de referencia / calibracao (publico)
+        referenceRoutes()
 
         // Auth (publico)
         authRoutes(container.userRepository, container.jwtService)
