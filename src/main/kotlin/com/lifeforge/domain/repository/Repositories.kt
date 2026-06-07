@@ -14,6 +14,7 @@ import com.lifeforge.domain.model.RecurrenceType
 import com.lifeforge.domain.model.RiskProfile
 import com.lifeforge.domain.model.ScheduleAffect
 import com.lifeforge.domain.model.User
+import kotlinx.serialization.json.JsonElement
 import java.math.BigDecimal
 import java.time.Instant
 
@@ -57,6 +58,18 @@ interface UserRepository {
      * nao existir.
      */
     suspend fun updateRiskProfile(userId: Long, profile: RiskProfile): Boolean
+}
+
+// ============================================================================
+// User profile (parametros estendidos, blob JSON 1:1 com o usuario)
+// ============================================================================
+
+interface UserProfileRepository {
+    /** Blob JSON do perfil do usuario, ou null se ainda nao foi preenchido. */
+    suspend fun get(userId: Long): JsonElement?
+
+    /** Cria ou substitui o perfil do usuario. Retorna o blob salvo. */
+    suspend fun upsert(userId: Long, data: JsonElement): JsonElement
 }
 
 // ============================================================================

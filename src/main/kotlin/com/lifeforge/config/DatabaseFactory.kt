@@ -40,6 +40,7 @@ object DatabaseFactory {
             // Tabelas referenciadas vem antes das que as referenciam.
             SchemaUtils.createMissingTablesAndColumns(
                 Users,
+                UserProfiles,
                 Goals,
                 IncomeSchedules,
                 ExpenseSchedules,

@@ -8,6 +8,7 @@ import com.lifeforge.data.repository.IncomeRepositoryImpl
 import com.lifeforge.data.repository.IncomeScheduleRepositoryImpl
 import com.lifeforge.data.repository.PredictionRepositoryImpl
 import com.lifeforge.data.repository.SimulationRepositoryImpl
+import com.lifeforge.data.repository.UserProfileRepositoryImpl
 import com.lifeforge.data.repository.UserRepositoryImpl
 import com.lifeforge.domain.repository.AssetRepository
 import com.lifeforge.domain.repository.ExpenseRepository
@@ -17,6 +18,7 @@ import com.lifeforge.domain.repository.IncomeRepository
 import com.lifeforge.domain.repository.IncomeScheduleRepository
 import com.lifeforge.domain.repository.PredictionRepository
 import com.lifeforge.domain.repository.SimulationRepository
+import com.lifeforge.domain.repository.UserProfileRepository
 import com.lifeforge.domain.repository.UserRepository
 import com.lifeforge.engine.montecarlo.MonteCarloEngine
 import com.lifeforge.engine.optimization.OptimizationEngine
@@ -40,6 +42,7 @@ class AppContainer(config: ApplicationConfig) : AutoCloseable {
 
     // ----- Repositorios CRUD existentes (Sprints anteriores) -----
     val userRepository: UserRepository = UserRepositoryImpl()
+    val userProfileRepository: UserProfileRepository = UserProfileRepositoryImpl()
     val goalRepository: GoalRepository = GoalRepositoryImpl()
     val incomeRepository: IncomeRepository = IncomeRepositoryImpl()
     val expenseRepository: ExpenseRepository = ExpenseRepositoryImpl()

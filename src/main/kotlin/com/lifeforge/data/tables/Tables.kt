@@ -25,6 +25,18 @@ object Users : LongIdTable("users") {
     val updatedAt = timestamp("updated_at").clientDefault { Instant.now() }
 }
 
+/**
+ * Perfil estendido do usuario (1:1 com Users). Guarda os parametros
+ * opcionais que alimentam projecoes (dados pessoais, profissionais, moradia,
+ * tributacao, etc.) como um blob JSONB — o conjunto de campos evolui sem
+ * exigir migracao de coluna a coluna; o contrato tipado vive no app.
+ */
+object UserProfiles : LongIdTable("user_profiles") {
+    val userId = reference("user_id", Users).uniqueIndex()
+    val data = jsonb<JsonElement>("data", Json)
+    val updatedAt = timestamp("updated_at").clientDefault { Instant.now() }
+}
+
 object Goals : LongIdTable("goals") {
     val userId = reference("user_id", Users).index()
     val name = varchar("name", 200)

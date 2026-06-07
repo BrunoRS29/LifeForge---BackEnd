@@ -10,6 +10,7 @@ import com.lifeforge.routes.goalRoutes
 import com.lifeforge.routes.incomeRoutes
 import com.lifeforge.routes.optimizationRoutes
 import com.lifeforge.routes.predictionRoutes
+import com.lifeforge.routes.profileRoutes
 import com.lifeforge.routes.simulationCalibratedRoutes
 import com.lifeforge.routes.simulationRoutes
 import com.lifeforge.routes.userRoutes
@@ -52,6 +53,7 @@ fun Application.configureRouting(container: AppContainer) {
 
         // CRUD existentes (Sprint 1)
         userRoutes(container.userRepository)
+        profileRoutes(container.userProfileRepository)
         goalRoutes(container.goalRepository)
         incomeRoutes(container.incomeRepository, container.incomeScheduleRepository)
         expenseRoutes(container.expenseRepository, container.expenseScheduleRepository)
