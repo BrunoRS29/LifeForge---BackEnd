@@ -3,6 +3,8 @@ package com.lifeforge.routes
 import com.lifeforge.domain.model.Simulation
 import com.lifeforge.domain.repository.GoalRepository
 import com.lifeforge.domain.repository.SimulationRepository
+import com.lifeforge.domain.repository.UserProfileRepository
+import com.lifeforge.domain.repository.UserRepository
 import com.lifeforge.dto.CalibrationSummaryResponse
 import com.lifeforge.dto.ErrorResponse
 import com.lifeforge.dto.HistogramBucketDto
@@ -13,6 +15,7 @@ import com.lifeforge.dto.TrajectoryBandDto
 import com.lifeforge.engine.montecarlo.MonteCarloEngine
 import com.lifeforge.engine.montecarlo.MonteCarloParameters
 import com.lifeforge.engine.montecarlo.MonteCarloResult
+import com.lifeforge.engine.statistics.ReferenceData
 import com.lifeforge.ml.MlPredictionService
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.auth.authenticate
@@ -26,7 +29,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.put
 
 /**
@@ -51,6 +58,8 @@ fun Route.simulationCalibratedRoutes(
     goalRepository: GoalRepository,
     engine: MonteCarloEngine,
     predictionService: MlPredictionService,
+    userRepository: UserRepository,
+    userProfileRepository: UserProfileRepository,
 ) {
     val json = Json { ignoreUnknownKeys = true }
 
@@ -90,18 +99,16 @@ fun Route.simulationCalibratedRoutes(
                     return@post
                 }
 
-                // 3. Parametros base (sem monthlyContribution)
-                val baseParams = MonteCarloParameters(
-                    initialCapital = request.initialCapital,
-                    monthlyContribution = 0.0,  // sera sobrescrito pela calibracao
-                    expectedReturnAnnual = request.expectedReturnAnnual,
-                    volatilityAnnual = request.volatilityAnnual,
-                    horizonMonths = request.horizonMonths,
-                    targetAmount = request.targetAmount,
-                    unemploymentProbAnnual = request.unemploymentProbAnnual,
-                    unemploymentDurationMonths = request.unemploymentDurationMonths,
-                    inflationAnnual = request.inflationAnnual,
-                    numSimulations = request.numSimulations,
+                // 3. Parametros base (sem monthlyContribution). As premissas de
+                // longo prazo omitidas pelo app (null) sao preenchidas pela base
+                // de referencia calibrada ao perfil do usuario: o perfil de risco
+                // (User) define retorno/volatilidade; o vinculo (perfil estendido,
+                // JSONB) define a probabilidade de desemprego.
+                val riskProfile = userRepository.findById(userId)?.riskProfile
+                val employmentType = userProfileRepository.get(userId)?.employmentType()
+                val preset = ReferenceData.presetFor(riskProfile, employmentType)
+                val baseParams = request.toBaseParameters(
+                    preset = preset,
                     seed = request.seed ?: System.currentTimeMillis(),
                 )
 
@@ -187,23 +194,57 @@ fun Route.simulationCalibratedRoutes(
 // Helpers locais
 // ============================================================================
 
+// Campos de premissa sao opcionais (null = usar preset). So validamos quando
+// o app de fato enviou um valor; os valores do preset sao sempre validos.
 private fun validate(req: RunCalibratedSimulationRequest): ErrorResponse? = when {
     req.initialCapital < 0.0 ->
         ErrorResponse("VALIDATION", "initialCapital deve ser >= 0")
-    req.volatilityAnnual < 0.0 ->
+    req.volatilityAnnual != null && req.volatilityAnnual < 0.0 ->
         ErrorResponse("VALIDATION", "volatilityAnnual deve ser >= 0")
     req.targetAmount <= 0.0 ->
         ErrorResponse("VALIDATION", "targetAmount deve ser > 0")
     req.horizonMonths <= 0 ->
         ErrorResponse("VALIDATION", "horizonMonths deve ser > 0")
-    req.unemploymentProbAnnual !in 0.0..1.0 ->
+    req.unemploymentProbAnnual != null && req.unemploymentProbAnnual !in 0.0..1.0 ->
         ErrorResponse("VALIDATION", "unemploymentProbAnnual deve estar em [0, 1]")
+    req.unemploymentDurationMonths != null && req.unemploymentDurationMonths < 0 ->
+        ErrorResponse("VALIDATION", "unemploymentDurationMonths deve ser >= 0")
     req.numSimulations <= 0 ->
         ErrorResponse("VALIDATION", "numSimulations deve ser > 0")
     req.incomeHorizonMonths !in 1..60 ->
         ErrorResponse("VALIDATION", "incomeHorizonMonths deve estar em [1, 60]")
     else -> null
 }
+
+/**
+ * Extrai o vinculo (employmentType) do blob JSON do perfil estendido. O app
+ * grava o NOME do enum (ex.: "CLT", "CIVIL_SERVANT"), que casa com as chaves
+ * de [ReferenceData.byEmploymentType]. Retorna null se ausente/nao-string.
+ */
+private fun JsonElement.employmentType(): String? =
+    ((this as? JsonObject)?.get("employmentType") as? JsonPrimitive)?.contentOrNull
+
+/**
+ * Constroi os parametros base da engine resolvendo as premissas de longo
+ * prazo: usa o valor enviado pelo app quando presente, senao o [preset]
+ * calibrado ao perfil do usuario. `internal` para ser coberto por teste.
+ */
+internal fun RunCalibratedSimulationRequest.toBaseParameters(
+    preset: ReferenceData.CalibrationPreset,
+    seed: Long,
+): MonteCarloParameters = MonteCarloParameters(
+    initialCapital = initialCapital,
+    monthlyContribution = 0.0,  // sera sobrescrito pela calibracao
+    expectedReturnAnnual = expectedReturnAnnual ?: preset.expectedReturnAnnual,
+    volatilityAnnual = volatilityAnnual ?: preset.volatilityAnnual,
+    horizonMonths = horizonMonths,
+    targetAmount = targetAmount,
+    unemploymentProbAnnual = unemploymentProbAnnual ?: preset.unemploymentProbAnnual,
+    unemploymentDurationMonths = unemploymentDurationMonths ?: preset.unemploymentDurationMonths,
+    inflationAnnual = inflationAnnual ?: preset.inflationAnnual,
+    numSimulations = numSimulations,
+    seed = seed,
+)
 
 /**
  * Reaproveita o mapper que ja vivia no SimulationRoutes da Sprint 2.

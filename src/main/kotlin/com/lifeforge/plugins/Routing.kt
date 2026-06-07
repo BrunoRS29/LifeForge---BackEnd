@@ -77,6 +77,8 @@ fun Application.configureRouting(container: AppContainer) {
             goalRepository = container.goalRepository,
             engine = container.monteCarloEngine,
             predictionService = container.mlPredictionService,
+            userRepository = container.userRepository,
+            userProfileRepository = container.userProfileRepository,
         )
 
         // Otimizacao (Sprint 3)
