@@ -1,5 +1,6 @@
 package com.lifeforge.routes
 
+import com.lifeforge.dto.ChildCostBracketDto
 import com.lifeforge.dto.EmploymentStatsDto
 import com.lifeforge.dto.ReferenceDataResponse
 import com.lifeforge.dto.RiskProfileStatsDto
@@ -34,10 +35,14 @@ private fun ReferenceData.toResponse(): ReferenceDataResponse = ReferenceDataRes
     unexpectedExpenseAnnualFrequency = unexpectedExpenseAnnualFrequency,
     unexpectedExpenseMeanFractionOfIncome = unexpectedExpenseMeanFractionOfIncome,
     lifeExpectancyYears = lifeExpectancyYears,
+    vehicleDepreciationAnnual = vehicleDepreciationAnnual,
+    realEstateAppreciationAnnual = realEstateAppreciationAnnual,
+    safeWithdrawalRate = safeWithdrawalRate,
     byRiskProfile = byRiskProfile.entries.associate { (profile, stats) ->
         profile.name to RiskProfileStatsDto(stats.expectedReturnAnnual, stats.volatilityAnnual)
     },
     byEmploymentType = byEmploymentType.mapValues { (_, stats) ->
         EmploymentStatsDto(stats.unemploymentProbAnnual, stats.incomeVolatilityAnnual)
     },
+    childCostByAge = childCostByAge.map { ChildCostBracketDto(it.ageMaxInclusive, it.monthlyCost) },
 )

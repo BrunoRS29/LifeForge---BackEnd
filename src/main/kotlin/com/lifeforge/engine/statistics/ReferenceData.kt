@@ -73,6 +73,37 @@ object ReferenceData {
     /** Expectativa de vida ao nascer (IBGE), util para horizonte de aposentadoria. */
     val lifeExpectancyYears = 77
 
+    // ---- Ativos reais (projecao de patrimonio) ----
+    /** Depreciacao anual media de veiculos (tabela FIPE / literatura). */
+    val vehicleDepreciationAnnual = 0.10
+    /** Valorizacao imobiliaria nominal de longo prazo (FipeZap / IBGE). */
+    val realEstateAppreciationAnnual = 0.05
+
+    // ---- Independencia financeira ----
+    /**
+     * Taxa de retirada segura anual (regra dos 4% - Trinity Study). O patrimonio
+     * de independencia financeira que cobre os gastos anuais e ~ gastos /
+     * safeWithdrawalRate = 25x gastos anuais.
+     */
+    val safeWithdrawalRate = 0.04
+
+    // ---- Custo de filhos por faixa etaria ----
+    /** Faixa etaria (ate [ageMaxInclusive] anos) e custo mensal medio associado. */
+    data class ChildCostBracket(val ageMaxInclusive: Int, val monthlyCost: Double)
+
+    /** Custo mensal medio por filho conforme a idade (estimativa BR classe media). */
+    val childCostByAge: List<ChildCostBracket> = listOf(
+        ChildCostBracket(ageMaxInclusive = 3, monthlyCost = 800.0),
+        ChildCostBracket(ageMaxInclusive = 6, monthlyCost = 950.0),
+        ChildCostBracket(ageMaxInclusive = 12, monthlyCost = 1_100.0),
+        ChildCostBracket(ageMaxInclusive = 18, monthlyCost = 1_600.0),
+        ChildCostBracket(ageMaxInclusive = 24, monthlyCost = 1_200.0),
+    )
+
+    /** Custo mensal de um filho na idade [ageYears]; 0 quando ja independente (>24). */
+    fun childMonthlyCost(ageYears: Int): Double =
+        childCostByAge.firstOrNull { ageYears <= it.ageMaxInclusive }?.monthlyCost ?: 0.0
+
     /**
      * Retorno x volatilidade por perfil de risco (carteira-tipo). Valores
      * nominais de longo prazo: conservador ~ renda fixa; arrojado ~ maior

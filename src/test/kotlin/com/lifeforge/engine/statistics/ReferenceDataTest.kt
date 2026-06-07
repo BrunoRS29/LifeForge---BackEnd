@@ -75,4 +75,21 @@ class ReferenceDataTest : StringSpec({
         result.successProbability shouldBeLessThanOrEqualTo 1.0
         result.numSimulations shouldBe 2_000
     }
+
+    "ativos reais e regra dos 4% ficam em faixas plausiveis" {
+        ReferenceData.vehicleDepreciationAnnual shouldBeGreaterThan 0.0
+        ReferenceData.vehicleDepreciationAnnual shouldBeLessThan 0.30
+        ReferenceData.realEstateAppreciationAnnual shouldBeGreaterThan 0.0
+        ReferenceData.realEstateAppreciationAnnual shouldBeLessThan 0.20
+        ReferenceData.safeWithdrawalRate shouldBeGreaterThan 0.0
+        ReferenceData.safeWithdrawalRate shouldBeLessThan 0.10
+    }
+
+    "custo de filho sobe ate a adolescencia e zera na vida adulta" {
+        val crianca = ReferenceData.childMonthlyCost(2)
+        val adolescente = ReferenceData.childMonthlyCost(16)
+        crianca shouldBeGreaterThan 0.0
+        adolescente shouldBeGreaterThan crianca
+        ReferenceData.childMonthlyCost(30) shouldBe 0.0
+    }
 })

@@ -70,6 +70,23 @@ renda mensal prevista`. É ligado automaticamente na rota calibrada
 | Magnitude média do choque | 0,5 × renda mensal |
 | Expectativa de vida | 77 anos |
 
+### Ativos reais, independência financeira e filhos
+| Item | Valor |
+|---|---|
+| Depreciação anual de veículos | 10% |
+| Valorização imobiliária anual | 5% |
+| Taxa de retirada segura (regra dos 4%) | 4% |
+| Custo mensal por filho — 0–3 anos | R$ 800 |
+| Custo mensal por filho — 4–6 anos | R$ 950 |
+| Custo mensal por filho — 7–12 anos | R$ 1.100 |
+| Custo mensal por filho — 13–18 anos | R$ 1.600 |
+| Custo mensal por filho — 19–24 anos | R$ 1.200 |
+
+Esses parâmetros alimentam, respectivamente: depreciação de veículos e
+valorização de imóveis na projeção; o índice de independência financeira
+(FI/RE = patrimônio ÷ 25× gastos anuais); e o custo de filhos por faixa
+etária somado às despesas ao longo do horizonte.
+
 ## Fontes
 - **IPCA / SELIC / CDI:** Banco Central do Brasil e IBGE (séries históricas).
 - **Renda variável (retorno e volatilidade):** Ibovespa / B3, comportamento de
