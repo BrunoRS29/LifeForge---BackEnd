@@ -7,9 +7,11 @@ import io.ktor.server.application.*
 import io.ktor.server.plugins.calllogging.*
 import io.ktor.server.plugins.cors.routing.*
 import io.ktor.server.plugins.defaultheaders.*
+import io.ktor.server.plugins.ratelimit.*
 import io.ktor.server.plugins.statuspages.*
 import io.ktor.server.response.*
 import org.slf4j.event.Level
+import kotlin.time.Duration.Companion.seconds
 
 fun Application.configureHTTP() {
 
@@ -22,7 +24,16 @@ fun Application.configureHTTP() {
     }
 
     install(CORS) {
-        anyHost()
+        // Em producao, defina CORS_ALLOWED_HOSTS (lista separada por virgula,
+        // ex.: "app.lifeforge.com,admin.lifeforge.com"). Sem a variavel, libera
+        // qualquer origem - conveniente apenas para desenvolvimento local.
+        val allowedHosts = System.getenv("CORS_ALLOWED_HOSTS")
+            ?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() }
+        if (allowedHosts.isNullOrEmpty()) {
+            anyHost()
+        } else {
+            allowedHosts.forEach { host -> allowHost(host, schemes = listOf("https", "http")) }
+        }
         allowMethod(HttpMethod.Options)
         allowMethod(HttpMethod.Get)
         allowMethod(HttpMethod.Post)
@@ -32,15 +43,23 @@ fun Application.configureHTTP() {
         allowHeader(HttpHeaders.ContentType)
     }
 
+    // Rate limiting nomeado "auth": protege login/registro contra forca bruta.
+    // Aplicado seletivamente nas rotas de auth (ver plugins/Routing.kt).
+    install(RateLimit) {
+        register(RateLimitName("auth")) {
+            rateLimiter(limit = 20, refillPeriod = 60.seconds)
+        }
+    }
+
     install(StatusPages) {
 
         exception<Throwable> { call: ApplicationCall, cause: Throwable ->
-            // Loga o stack trace - sem isto os 500 ficam silenciosos e
-            // impossiveis de diagnosticar (vide bug do run-calibrated).
+            // Loga o stack trace completo (diagnostico) mas NAO o vaza ao
+            // cliente: a resposta carrega apenas uma mensagem generica.
             call.application.log.error("Unhandled exception (500)", cause)
             call.respond(
                 HttpStatusCode.InternalServerError,
-                ErrorResponse("INTERNAL_ERROR", cause.message ?: "Erro interno")
+                ErrorResponse("INTERNAL_ERROR", "Erro interno do servidor")
             )
         }
     }

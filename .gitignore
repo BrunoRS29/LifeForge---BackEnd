@@ -1,11 +1,20 @@
 .gradle/
 build/
 out/
+.kotlin/
 .idea/
 *.iml
 *.iws
 *.ipr
 .DS_Store
+
+# Python (microsservico ML)
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+venv/
+.venv/
 
 # Variaveis sensiveis
 .env

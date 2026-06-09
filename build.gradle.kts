@@ -51,6 +51,8 @@ dependencies {
     implementation("io.ktor:ktor-server-request-validation-jvm:$ktorVersion")
     implementation("io.ktor:ktor-server-call-logging-jvm:$ktorVersion")
     implementation("io.ktor:ktor-server-default-headers-jvm:$ktorVersion")
+    // Rate limiting (protege /auth contra forca bruta)
+    implementation("io.ktor:ktor-server-rate-limit-jvm:$ktorVersion")
 
     // ORM Exposed (sobre PostgreSQL)
     implementation("org.jetbrains.exposed:exposed-core:$exposedVersion")

@@ -16,6 +16,8 @@ import com.lifeforge.routes.simulationCalibratedRoutes
 import com.lifeforge.routes.simulationRoutes
 import com.lifeforge.routes.userRoutes
 import io.ktor.server.application.Application
+import io.ktor.server.plugins.ratelimit.RateLimitName
+import io.ktor.server.plugins.ratelimit.rateLimit
 import io.ktor.server.response.respond
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
@@ -52,8 +54,10 @@ fun Application.configureRouting(container: AppContainer) {
         // Base de estatisticas de referencia / calibracao (publico)
         referenceRoutes()
 
-        // Auth (publico)
-        authRoutes(container.userRepository, container.jwtService)
+        // Auth (publico) - sob rate limit "auth" contra forca bruta
+        rateLimit(RateLimitName("auth")) {
+            authRoutes(container.userRepository, container.jwtService)
+        }
 
         // CRUD existentes (Sprint 1)
         userRoutes(container.userRepository)
