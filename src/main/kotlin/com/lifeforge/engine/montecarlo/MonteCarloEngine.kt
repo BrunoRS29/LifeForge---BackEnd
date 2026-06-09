@@ -5,6 +5,7 @@ import com.lifeforge.engine.statistics.RandomGenerators.nextExponential
 import com.lifeforge.engine.statistics.RandomGenerators.nextNormal
 import com.lifeforge.engine.statistics.RandomGenerators.nextPoisson
 import com.lifeforge.engine.statistics.Statistics
+import java.util.stream.IntStream
 import kotlin.random.Random
 import kotlin.system.measureTimeMillis
 
@@ -46,7 +47,6 @@ class MonteCarloEngine {
      */
     fun run(parameters: MonteCarloParameters): MonteCarloResult {
         val finalCapitals = DoubleArray(parameters.numSimulations)
-        val random = Random(parameters.seed)
 
         // Para o fan chart guardamos a trajetoria mes a mes de uma AMOSTRA das
         // simulacoes - nao de todas: 10k x 240 doubles explodiria memoria e o
@@ -57,11 +57,16 @@ class MonteCarloEngine {
         }
 
         val executionTime = measureTimeMillis {
-            // Cada iteracao do laco externo e UMA simulacao independente.
-            // Cada iteracao do laco interno e UM mes dessa simulacao.
-            for (sim in 0 until parameters.numSimulations) {
+            // As N simulacoes sao independentes -> paralelizamos pelos nucleos
+            // disponiveis. Cada simulacao recebe um RNG proprio, semeado de
+            // forma deterministica a partir de (seed, indice), de modo que o
+            // resultado independe da ordem de execucao e a reprodutibilidade por
+            // seed e preservada. As escritas vao para indices distintos de
+            // finalCapitals/sampledPaths, sem condicao de corrida.
+            IntStream.range(0, parameters.numSimulations).parallel().forEach { sim ->
+                val rng = Random(simSeed(parameters.seed, sim))
                 val path = if (sim < trajectorySampleSize) sampledPaths[sim] else null
-                finalCapitals[sim] = simulateSingle(parameters, random, path)
+                finalCapitals[sim] = simulateSingle(parameters, rng, path)
             }
         }
 
@@ -208,6 +213,15 @@ class MonteCarloEngine {
             )
         }
     }
+
+    /**
+     * Semente deterministica por simulacao, a partir da seed global e do
+     * indice. A mistura por constantes de um gerador linear-congruente
+     * descorrelaciona substreams de indices vizinhos, tornando a execucao
+     * paralela reprodutivel e independente da ordem.
+     */
+    private fun simSeed(seed: Long, sim: Int): Long =
+        seed * 6364136223846793005L + sim.toLong() * 1442695040888963407L + 1L
 
     companion object {
         /**

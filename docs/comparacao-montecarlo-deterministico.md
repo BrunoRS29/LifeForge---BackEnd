@@ -5,16 +5,12 @@
 | Cenário | Determinístico | MC — média | MC — mediana | MC — P10 | MC — P90 | P(sucesso) |
 |---|---|---|---|---|---|---|
 | 0% vol | R$ 1,371,046 | R$ 1,371,046 | R$ 1,371,046 | R$ 1,371,046 | R$ 1,371,046 | 100.0% |
-| 10% vol | R$ 1,371,046 | R$ 1,369,797 | R$ 1,294,493 | R$ 867,969 | R$ 1,968,128 | 79.4% |
-| 15% vol | R$ 1,371,046 | R$ 1,368,997 | R$ 1,206,510 | R$ 673,806 | R$ 2,258,196 | 65.7% |
-| 25% vol | R$ 1,371,046 | R$ 1,366,555 | R$ 972,170 | R$ 395,126 | R$ 2,724,358 | 48.6% |
+| 10% vol | R$ 1,371,046 | R$ 1,370,238 | R$ 1,292,087 | R$ 866,654 | R$ 1,973,978 | 79.5% |
+| 15% vol | R$ 1,371,046 | R$ 1,370,544 | R$ 1,203,651 | R$ 669,982 | R$ 2,270,223 | 65.3% |
+| 25% vol | R$ 1,371,046 | R$ 1,372,744 | R$ 968,425 | R$ 391,122 | R$ 2,751,826 | 48.3% |
 
 ## Leitura
 
 - **Sem volatilidade**, o Monte Carlo converge para o determinístico — validação de que o motor implementa corretamente a fórmula 6.1.
 - **Com volatilidade**, a *média* do MC permanece próxima do determinístico, mas a *mediana* cai (assimetria / volatility drag) e abre-se a faixa P10–P90: a incerteza que a projeção determinística simplesmente ignora.
 - O valor agregado do Monte Carlo é **quantificar risco** (P10, P90, probabilidade de sucesso), e não entregar um único número pontual — núcleo da hipótese do TCC.
-
-## Conclusão para a validação estatística
-
-O método tradicional (planilha determinística) entrega **um único número** (R$ 1,371 mi) e sugere 100% de confiança. O Monte Carlo mostra que, com volatilidade realista de 15% a.a., esse mesmo plano tem apenas **65,7%** de chance de atingir a meta, com cenário pessimista (P10) de R$ 674 mil. É exatamente a diferença de previsibilidade/qualidade de decisão que a hipótese do TCC afirma.
