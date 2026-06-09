@@ -99,6 +99,32 @@ class MonteCarloEngineTest : StringSpec({
         engine.run(params).mean shouldBe engine.run(zerado).mean
     }
 
+    "(g) variacao de renda introduz dispersao no patrimonio final" {
+        // Sem volatilidade de mercado nem desemprego, a unica fonte de incerteza
+        // passa a ser a variacao de renda (Secao 6.2).
+        val base = MonteCarloParameters(
+            initialCapital = 10_000.0,
+            monthlyContribution = 2_000.0,
+            expectedReturnAnnual = 0.08,
+            volatilityAnnual = 0.0,
+            horizonMonths = 120,
+            targetAmount = 300_000.0,
+            numSimulations = 5_000,
+            seed = 11L,
+        )
+        val comVariacao = base.copy(incomeVolatilityAnnual = 0.30)
+
+        val semVariacao = engine.run(base)
+        val resultadoComVariacao = engine.run(comVariacao)
+
+        // Sem variacao, e deterministico (dispersao ~ 0).
+        semVariacao.standardDeviation shouldBeLessThan 1.0
+        // Com variacao de renda, surge dispersao no patrimonio final.
+        resultadoComVariacao.standardDeviation shouldBeGreaterThan semVariacao.standardDeviation
+        resultadoComVariacao.successProbability shouldBeGreaterThanOrEqualTo 0.0
+        resultadoComVariacao.successProbability shouldBeLessThanOrEqualTo 1.0
+    }
+
     "(b) mesma seed produz exatamente o mesmo resultado (reprodutibilidade)" {
         val params = MonteCarloParameters(
             initialCapital = 50_000.0,

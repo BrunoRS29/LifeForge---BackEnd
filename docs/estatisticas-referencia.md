@@ -16,7 +16,7 @@ pelo microsserviço de IA com o histórico do próprio usuário.
 | Variável (proposta) | Distribuição | Parâmetro na base |
 |---|---|---|
 | Retorno de investimento | Normal/LogNormal | `byRiskProfile[perfil].{expectedReturnAnnual, volatilityAnnual}` |
-| Variação de renda | Normal truncada | `salaryGrowth.{mean, stdDev}` |
+| Variação de renda | Normal truncada | `salaryGrowth.{mean, stdDev}` (tendência); no motor, `incomeVolatilityAnnual` perturba o aporte mês a mês (Normal truncada em 0) |
 | Evento de desemprego | Bernoulli | `byEmploymentType[vínculo].unemploymentProbAnnual` + `unemploymentDurationMonths` |
 | Despesa inesperada | Poisson + Exponencial | `unexpectedExpenseAnnualFrequency` (λ) + `unexpectedExpenseMeanFractionOfIncome` |
 | Inflação | Normal | `inflation.{mean, stdDev}` |

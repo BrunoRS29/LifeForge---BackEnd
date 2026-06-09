@@ -19,6 +19,8 @@ import kotlin.system.measureTimeMillis
  *  - evento de desemprego: amostrado de Bernoulli(prob_mensal) a cada mes
  *  - despesa inesperada: numero de eventos/mes ~ Poisson(lambda_mensal) e
  *    magnitude de cada evento ~ Exponencial(media) (Proposta, Secao 6.2)
+ *  - variacao de renda: o aporte mensal e perturbado por uma Normal truncada
+ *    em zero (incomeVolatilityAnnual), capturando a incerteza salarial (6.2)
  *
  * Modelo matematico (formula determinstica subjacente):
  *
@@ -97,6 +99,7 @@ class MonteCarloEngine {
         val shockMonthlyLambda = params.unexpectedExpenseMonthlyFrequency
         val shockMeanAmount = params.unexpectedExpenseMeanAmount
         val shocksEnabled = shockMonthlyLambda > 0.0 && shockMeanAmount > 0.0
+        val incomeVolMonthly = params.incomeVolatilityMonthly
 
         for (month in 0 until params.horizonMonths) {
             // 1. Sorteia retorno do mes (Normal).
@@ -113,9 +116,17 @@ class MonteCarloEngine {
                 unemployedMonthsRemaining = params.unemploymentDurationMonths
             }
 
-            // 3. Define aporte do mes: zero se desempregado, contribuicao normal caso contrario.
-            val contribution = if (unemployedMonthsRemaining > 0) 0.0
-                else params.monthlyContribution
+            // 3. Define aporte do mes: zero se desempregado; caso contrario, o
+            //    aporte base, opcionalmente perturbado pela variacao de renda
+            //    (Secao 6.2): uma Normal truncada em zero (a renda varia mes a
+            //    mes, mas o aporte nao fica negativo).
+            val contribution = when {
+                unemployedMonthsRemaining > 0 -> 0.0
+                incomeVolMonthly > 0.0 ->
+                    (params.monthlyContribution * (1.0 + random.nextNormal(0.0, incomeVolMonthly)))
+                        .coerceAtLeast(0.0)
+                else -> params.monthlyContribution
+            }
 
             // 4. Atualiza patrimonio segundo a recorrencia P(t+1) = P(t)*(1+r) + A
             //    O retorno incide sobre o capital existente, depois adiciona o aporte.

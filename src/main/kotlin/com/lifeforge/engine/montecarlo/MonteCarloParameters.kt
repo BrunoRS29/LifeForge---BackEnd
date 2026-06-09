@@ -40,6 +40,7 @@ data class MonteCarloParameters(
     val seed: Long = System.currentTimeMillis(),
     val unexpectedExpenseAnnualFrequency: Double = 0.0,
     val unexpectedExpenseMeanAmount: Double = 0.0,
+    val incomeVolatilityAnnual: Double = 0.0,
 ) {
     init {
         require(initialCapital >= 0.0) { "initialCapital deve ser >= 0" }
@@ -59,6 +60,9 @@ data class MonteCarloParameters(
         }
         require(unexpectedExpenseMeanAmount >= 0.0) {
             "unexpectedExpenseMeanAmount deve ser >= 0"
+        }
+        require(incomeVolatilityAnnual >= 0.0) {
+            "incomeVolatilityAnnual deve ser >= 0"
         }
     }
 
@@ -99,4 +103,11 @@ data class MonteCarloParameters(
      */
     val unexpectedExpenseMonthlyFrequency: Double
         get() = unexpectedExpenseAnnualFrequency / 12.0
+
+    /**
+     * Volatilidade mensal da renda (variacao de renda, Secao 6.2), a partir da
+     * anual: sigma_m = sigma_a / sqrt(12). 0 desativa a variacao de renda.
+     */
+    val incomeVolatilityMonthly: Double
+        get() = incomeVolatilityAnnual / sqrt(12.0)
 }
