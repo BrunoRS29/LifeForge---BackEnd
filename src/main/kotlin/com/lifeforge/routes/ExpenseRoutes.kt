@@ -40,7 +40,8 @@ fun Route.expenseRoutes(
         route("/api/v1/expenses") {
 
             get {
-                call.respond(repository.findAllByUser(call.userId()).map { it.toDto() })
+                // Paginacao opcional via ?limit=&offset= (ver ApplicationCall.paginate).
+                call.respond(call.paginate(repository.findAllByUser(call.userId()).map { it.toDto() }))
             }
 
             post {

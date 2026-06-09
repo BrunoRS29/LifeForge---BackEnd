@@ -203,7 +203,8 @@ fun Route.simulationCalibratedRoutes(
 
 // Campos de premissa sao opcionais (null = usar preset). So validamos quando
 // o app de fato enviou um valor; os valores do preset sao sempre validos.
-private fun validate(req: RunCalibratedSimulationRequest): ErrorResponse? = when {
+// `internal` para ser exercitada por testes (contrato de validacao da rota).
+internal fun validate(req: RunCalibratedSimulationRequest): ErrorResponse? = when {
     req.initialCapital < 0.0 ->
         ErrorResponse("VALIDATION", "initialCapital deve ser >= 0")
     req.volatilityAnnual != null && req.volatilityAnnual < 0.0 ->

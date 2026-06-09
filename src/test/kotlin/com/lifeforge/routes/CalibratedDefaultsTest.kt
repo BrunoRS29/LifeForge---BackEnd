@@ -5,6 +5,7 @@ import com.lifeforge.dto.RunCalibratedSimulationRequest
 import com.lifeforge.engine.statistics.ReferenceData
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.shouldNotBe
 
 /**
  * Testa a resolucao das premissas da simulacao calibrada: quando o app OMITE
@@ -90,5 +91,31 @@ class CalibratedDefaultsTest : StringSpec({
 
         params.unexpectedExpenseAnnualFrequency shouldBe 0.0
         params.unexpectedExpenseMeanAmount shouldBe 0.0
+    }
+
+    // ----- Contrato de validacao da rota run-calibrated -----
+
+    "validate aceita um request valido (premissas nulas usam preset)" {
+        validate(request()) shouldBe null
+    }
+
+    "validate rejeita targetAmount <= 0" {
+        validate(request().copy(targetAmount = 0.0)) shouldNotBe null
+    }
+
+    "validate rejeita horizonMonths <= 0" {
+        validate(request().copy(horizonMonths = 0)) shouldNotBe null
+    }
+
+    "validate rejeita volatilidade negativa quando informada" {
+        validate(request(volatilityAnnual = -0.1)) shouldNotBe null
+    }
+
+    "validate rejeita prob de desemprego fora de [0,1]" {
+        validate(request(unemploymentProbAnnual = 1.5)) shouldNotBe null
+    }
+
+    "validate rejeita incomeHorizonMonths fora de [1,60]" {
+        validate(request().copy(incomeHorizonMonths = 0)) shouldNotBe null
     }
 })

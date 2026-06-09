@@ -4,6 +4,7 @@ import com.lifeforge.config.AppContainer
 import com.lifeforge.routes.apiDocsRoutes
 import com.lifeforge.routes.assetRoutes
 import com.lifeforge.routes.authRoutes
+import com.lifeforge.routes.dashboardRoutes
 import com.lifeforge.routes.expenseRoutes
 import com.lifeforge.routes.financeImportRoutes
 import com.lifeforge.routes.goalRoutes
@@ -66,6 +67,14 @@ fun Application.configureRouting(container: AppContainer) {
         incomeRoutes(container.incomeRepository, container.incomeScheduleRepository)
         expenseRoutes(container.expenseRepository, container.expenseScheduleRepository)
         assetRoutes(container.assetRepository)
+
+        // Painel consolidado (Secao 10 da proposta)
+        dashboardRoutes(
+            incomeRepository = container.incomeRepository,
+            expenseRepository = container.expenseRepository,
+            assetRepository = container.assetRepository,
+            goalRepository = container.goalRepository,
+        )
 
         // Importacao de extratos bancarios em lote (Receitas + Despesas)
         financeImportRoutes(container.incomeRepository, container.expenseRepository)

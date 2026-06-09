@@ -88,11 +88,22 @@ valorização de imóveis na projeção; o índice de independência financeira
 etária somado às despesas ao longo do horizonte.
 
 ## Fontes
-- **IPCA / SELIC / CDI:** Banco Central do Brasil e IBGE (séries históricas).
+- **IPCA / SELIC / CDI:** Banco Central do Brasil (séries históricas do Sistema
+  Gerenciador de Séries Temporais — SGS) e IBGE (IPCA).
 - **Renda variável (retorno e volatilidade):** Ibovespa / B3, comportamento de
-  longo prazo; ANBIMA para renda fixa.
-- **Desemprego e duração:** IBGE — PNAD Contínua.
-- **Expectativa de vida:** IBGE — Tábuas Completas de Mortalidade.
+  longo prazo; ANBIMA (IMA / índices de renda fixa) para a renda fixa.
+- **Desemprego e duração:** IBGE — PNAD Contínua (taxa de desocupação e tempo
+  de procura por trabalho).
+- **Expectativa de vida:** IBGE — Tábuas Completas de Mortalidade (Brasil).
+- **Depreciação de veículos:** Tabela FIPE — séries históricas de preços médios
+  por modelo/ano (perda de valor anual).
+- **Valorização imobiliária:** Índice FipeZap de preços de imóveis; IBGE —
+  IPCA grupo Habitação.
+- **Regra dos 4% (taxa de retirada segura):** BENGEN, W. P. *Determining
+  Withdrawal Rates Using Historical Data* (1994); COOPER; HUBBARD; WALZ —
+  *Trinity Study* (1998).
+- **Custo de filhos por faixa etária:** IBGE — Pesquisa de Orçamentos
+  Familiares (POF), despesas de consumo por faixa etária e classe de renda.
 - **Distribuições de Monte Carlo:** GLASSERMAN, P. *Monte Carlo Methods in
   Financial Engineering* (2003); HULL, J. C. *Options, Futures, and Other
   Derivatives*.
