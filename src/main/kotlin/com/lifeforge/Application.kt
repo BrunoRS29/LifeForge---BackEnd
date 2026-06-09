@@ -3,6 +3,7 @@ package com.lifeforge
 import com.lifeforge.config.AppContainer
 import com.lifeforge.config.DatabaseFactory
 import com.lifeforge.plugins.configureHTTP
+import com.lifeforge.plugins.configureMonitoring
 import com.lifeforge.plugins.configureRouting
 import com.lifeforge.plugins.configureSecurity
 import com.lifeforge.plugins.configureSerialization
@@ -34,5 +35,6 @@ fun Application.module() {
     configureSerialization()
     configureSecurity(container.jwtService)
     configureHTTP()
+    configureMonitoring()
     configureRouting(container)
 }

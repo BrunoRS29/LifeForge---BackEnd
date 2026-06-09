@@ -53,6 +53,9 @@ dependencies {
     implementation("io.ktor:ktor-server-default-headers-jvm:$ktorVersion")
     // Rate limiting (protege /auth contra forca bruta)
     implementation("io.ktor:ktor-server-rate-limit-jvm:$ktorVersion")
+    // Observabilidade: metricas no formato Prometheus via Micrometer
+    implementation("io.ktor:ktor-server-metrics-micrometer-jvm:$ktorVersion")
+    implementation("io.micrometer:micrometer-registry-prometheus:1.12.13")
 
     // ORM Exposed (sobre PostgreSQL)
     implementation("org.jetbrains.exposed:exposed-core:$exposedVersion")
