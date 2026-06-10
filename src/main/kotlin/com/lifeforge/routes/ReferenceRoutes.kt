@@ -30,6 +30,7 @@ private fun ReferenceData.toResponse(): ReferenceDataResponse = ReferenceDataRes
     salaryGrowthAnnualStdDev = salaryGrowth.stdDev,
     selicAnnual = selicAnnual,
     riskFreeAnnual = riskFreeAnnual,
+    cdiVolatilityAnnual = cdiVolatilityAnnual,
     unemploymentDurationMonths = unemploymentDurationMonths,
     defaultUnemploymentProbAnnual = DEFAULT_UNEMPLOYMENT_PROB_ANNUAL,
     unexpectedExpenseAnnualFrequency = unexpectedExpenseAnnualFrequency,

@@ -56,6 +56,13 @@ object ReferenceData {
     val selicAnnual = 0.105
     /** Retorno livre de risco (CDI/Tesouro Selic). */
     val riskFreeAnnual = 0.10
+    /**
+     * Volatilidade anual do CDI (renda fixa pos-fixada). Praticamente nula no
+     * curto prazo; a referencia (ANBIMA, IMA-S) fica em torno de 0,2%-0,5% a.a.
+     * Usada como premissa "cenario mais seguro" quando o usuario nao define
+     * volatilidade propria.
+     */
+    val cdiVolatilityAnnual = 0.005
 
     // ---- Carreira / renda ----
     /** Crescimento salarial nominal anual (inflacao + ganho real medio). */

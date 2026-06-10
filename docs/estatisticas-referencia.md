@@ -39,6 +39,7 @@ renda mensal prevista`. É ligado automaticamente na rota calibrada
 | Inflação (IPCA) | média 4,5% · desvio 2,5% | meta + tolerância histórica |
 | SELIC | 10,5% | taxa básica de referência |
 | Livre de risco (CDI/Tesouro Selic) | 10,0% | base da renda fixa |
+| Volatilidade do CDI | 0,5% | renda fixa pós-fixada (ANBIMA IMA-S); usada no "cenário mais seguro" |
 
 ### Retorno × volatilidade por perfil de risco (carteira-tipo, nominal)
 | Perfil | Retorno a.a. | Volatilidade a.a. |
