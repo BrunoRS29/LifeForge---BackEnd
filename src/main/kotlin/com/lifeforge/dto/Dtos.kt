@@ -52,6 +52,12 @@ data class UpdateRiskProfileRequest(
     val riskProfile: String     // CONSERVATIVE | MODERATE | AGGRESSIVE
 )
 
+/** Body do PATCH /api/v1/users/me/name — troca do nome de exibicao. */
+@Serializable
+data class UpdateNameRequest(
+    val name: String
+)
+
 // ========== GOALS ==========
 
 @Serializable

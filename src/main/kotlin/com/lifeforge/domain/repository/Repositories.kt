@@ -58,6 +58,13 @@ interface UserRepository {
      * nao existir.
      */
     suspend fun updateRiskProfile(userId: Long, profile: RiskProfile): Boolean
+
+    /**
+     * Atualiza apenas o campo `name` do usuario (nome de exibicao).
+     * Retorna `true` se a linha foi atualizada, `false` se o usuario
+     * nao existir.
+     */
+    suspend fun updateName(userId: Long, name: String): Boolean
 }
 
 // ============================================================================

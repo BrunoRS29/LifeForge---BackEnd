@@ -3,6 +3,7 @@ package com.lifeforge.routes
 import com.lifeforge.domain.model.RiskProfile
 import com.lifeforge.domain.repository.UserRepository
 import com.lifeforge.dto.ErrorResponse
+import com.lifeforge.dto.UpdateNameRequest
 import com.lifeforge.dto.UpdateRiskProfileRequest
 import com.lifeforge.dto.UserDto
 import io.ktor.http.HttpStatusCode
@@ -70,6 +71,38 @@ fun Route.userRoutes(repository: UserRepository) {
                 }
 
                 // Retorna o user atualizado para o cliente sincronizar o cache local.
+                val user = repository.findById(userId)
+                if (user != null) {
+                    call.respond(user.toDto())
+                } else {
+                    call.respond(HttpStatusCode.NoContent)
+                }
+            }
+
+            // PATCH /me/name
+            //
+            // Troca apenas o nome de exibicao. Mesmo padrao do risk-profile:
+            // endpoint dedicado, validacao simples, retorna o user atualizado.
+            patch("/me/name") {
+                val userId = call.userId()
+                val body = call.receive<UpdateNameRequest>()
+                val name = body.name.trim()
+
+                if (name.isEmpty() || name.length > 100) {
+                    return@patch call.respond(
+                        HttpStatusCode.BadRequest,
+                        ErrorResponse("VALIDATION", "name deve ter entre 1 e 100 caracteres"),
+                    )
+                }
+
+                val updated = repository.updateName(userId, name)
+                if (!updated) {
+                    return@patch call.respond(
+                        HttpStatusCode.NotFound,
+                        ErrorResponse("NOT_FOUND", "Usuario nao encontrado"),
+                    )
+                }
+
                 val user = repository.findById(userId)
                 if (user != null) {
                     call.respond(user.toDto())

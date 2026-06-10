@@ -75,6 +75,14 @@ class UserRepositoryImpl : UserRepository {
         rows > 0
     }
 
+    override suspend fun updateName(userId: Long, name: String): Boolean = dbQuery {
+        val rows = Users.update({ Users.id eq userId }) { row ->
+            row[Users.name] = name
+            row[Users.updatedAt] = Instant.now()
+        }
+        rows > 0
+    }
+
     private fun ResultRow.toUser(): User = User(
         id = this[Users.id].value,
         email = this[Users.email],
