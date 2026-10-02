@@ -115,6 +115,23 @@ tasks.test {
     finalizedBy(tasks.jacocoTestReport)
 }
 
+// Benchmark dos tempos de processamento do motor (TCC, Secao 4.9.4 - Tabela 6).
+// Fica fora do `test` padrao por ser lento: `./gradlew benchmark`. O JaCoCo e
+// desligado aqui porque a instrumentacao de cobertura distorceria as medidas.
+// Relatorio: build/reports/analysis/tempos-processamento.md
+val benchmark by tasks.registering(Test::class) {
+    description = "Mede os tempos de processamento do motor (media de 30 execucoes)."
+    group = "verification"
+    useJUnitPlatform()
+    testClassesDirs = sourceSets["test"].output.classesDirs
+    classpath = sourceSets["test"].runtimeClasspath
+    systemProperty("lifeforge.benchmark", "true")
+    filter { includeTestsMatching("com.lifeforge.engine.EngineBenchmarkTest") }
+    outputs.upToDateWhen { false }
+    testLogging { showStandardStreams = true }
+    extensions.configure<JacocoTaskExtension> { isEnabled = false }
+}
+
 jacoco {
     toolVersion = "0.8.12"
 }

@@ -14,13 +14,17 @@ Relatórios em `build/reports/jacoco/test/` (HTML em `html/index.html`, além de
 
 Pacotes sob `com.lifeforge.engine.*` — o núcleo técnico do projeto:
 
-| Pacote | Cobertura de linhas |
-|---|---|
-| `com.lifeforge.engine.montecarlo` | 97,5% (118/121) |
-| `com.lifeforge.engine.optimization` | 95,6% (367/384) |
-| `com.lifeforge.engine.statistics` | 95,9% (70/73) |
-| **Motor agregado** | **96,0% (555/578)** — branches 72,7% |
+| Pacote | Cobertura de linhas | Cobertura de ramos |
+|---|---|---|
+| `com.lifeforge.engine.montecarlo` | 96,0% (144/150) | 76,7% |
+| `com.lifeforge.engine.optimization` | 95,6% (372/389) | 68,3% |
+| `com.lifeforge.engine.statistics` | 96,8% (120/124) | 79,2% |
+| **Motor agregado** | **95,9% (636/663)** | **73,5%** |
 
-**96,0% de cobertura de linhas no motor**, bem acima do mínimo de 70% exigido — critério 12.3 atendido.
+Medição de 02/10/2026, após a paralelização do motor, o choque de despesa
+inesperada e a variação de renda (que acrescentaram linhas ao pacote
+`montecarlo`). A versão anterior desta tabela registrava 96,0% (555/578).
+
+**95,9% de cobertura de linhas no motor**, bem acima do mínimo de 70% exigido — critério 12.3 atendido.
 
 A suíte que sustenta esse número inclui: testes do Monte Carlo (determinismo com volatilidade zero, reprodutibilidade por seed, monotonicidade de percentis, performance, fan chart), do motor de otimização (busca binária de aporte, prazo, rebalanceamento) e das estatísticas descritivas, além do `EngineAnalysisTest` (sensibilidade + comparação determinístico × Monte Carlo).
