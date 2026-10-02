@@ -30,6 +30,12 @@ data class RunSimulationRequest(
     val inflationAnnual: Double = 0.0,
     val numSimulations: Int = 10_000,
     val seed: Long? = null,
+    // Fontes de incerteza opcionais da Secao 6.2 (default 0 = desligadas, o
+    // que preserva o comportamento e os resultados das versoes anteriores):
+    // choque de despesa inesperada (Poisson + Exponencial) e variacao de renda.
+    val unexpectedExpenseAnnualFrequency: Double = 0.0,
+    val unexpectedExpenseMeanAmount: Double = 0.0,
+    val incomeVolatilityAnnual: Double = 0.0,
 )
 
 /**

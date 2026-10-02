@@ -35,7 +35,7 @@ fun Route.assetRoutes(repository: AssetRepository) {
                 val userId = call.userId()
                 val req = call.receive<AssetRequest>()
                 val parsed = parseAssetRequest(req) ?: run {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("VALIDATION", "Dados do ativo invalidos"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("VALIDATION", "Dados do ativo inválidos"))
                     return@post
                 }
                 val asset = repository.create(
@@ -52,23 +52,23 @@ fun Route.assetRoutes(repository: AssetRepository) {
             get("/{id}") {
                 val userId = call.userId()
                 val id = call.parameters["id"]?.toLongOrNull() ?: run {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("INVALID_ID", "ID invalido"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("INVALID_ID", "ID inválido"))
                     return@get
                 }
                 val asset = repository.findById(id, userId)
-                if (asset == null) call.respond(HttpStatusCode.NotFound, ErrorResponse("NOT_FOUND", "Ativo nao encontrado"))
+                if (asset == null) call.respond(HttpStatusCode.NotFound, ErrorResponse("NOT_FOUND", "Ativo não encontrado"))
                 else call.respond(asset.toDto())
             }
 
             put("/{id}") {
                 val userId = call.userId()
                 val id = call.parameters["id"]?.toLongOrNull() ?: run {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("INVALID_ID", "ID invalido"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("INVALID_ID", "ID inválido"))
                     return@put
                 }
                 val req = call.receive<AssetRequest>()
                 val parsed = parseAssetRequest(req) ?: run {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("VALIDATION", "Dados do ativo invalidos"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("VALIDATION", "Dados do ativo inválidos"))
                     return@put
                 }
                 val asset = repository.update(
@@ -80,18 +80,18 @@ fun Route.assetRoutes(repository: AssetRepository) {
                     expectedReturn = parsed.expectedReturn,
                     volatility = parsed.volatility
                 )
-                if (asset == null) call.respond(HttpStatusCode.NotFound, ErrorResponse("NOT_FOUND", "Ativo nao encontrado"))
+                if (asset == null) call.respond(HttpStatusCode.NotFound, ErrorResponse("NOT_FOUND", "Ativo não encontrado"))
                 else call.respond(asset.toDto())
             }
 
             delete("/{id}") {
                 val userId = call.userId()
                 val id = call.parameters["id"]?.toLongOrNull() ?: run {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("INVALID_ID", "ID invalido"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("INVALID_ID", "ID inválido"))
                     return@delete
                 }
                 if (repository.delete(id, userId)) call.respond(HttpStatusCode.NoContent)
-                else call.respond(HttpStatusCode.NotFound, ErrorResponse("NOT_FOUND", "Ativo nao encontrado"))
+                else call.respond(HttpStatusCode.NotFound, ErrorResponse("NOT_FOUND", "Ativo não encontrado"))
             }
         }
     }

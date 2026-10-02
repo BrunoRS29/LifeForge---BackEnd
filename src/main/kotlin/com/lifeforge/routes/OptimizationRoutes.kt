@@ -70,12 +70,12 @@ fun Route.optimizationRoutes(
                     val goalId = req.goalId.toLongOrNull()
                         ?: return@post call.respond(
                             HttpStatusCode.BadRequest,
-                            ErrorResponse("VALIDATION", "goalId invalido")
+                            ErrorResponse("VALIDATION", "goalId inválido")
                         )
                     if (goalRepository.findById(goalId, userId) == null) {
                         return@post call.respond(
                             HttpStatusCode.NotFound,
-                            ErrorResponse("NOT_FOUND", "Meta nao encontrada")
+                            ErrorResponse("NOT_FOUND", "Meta não encontrada")
                         )
                     }
                 }
@@ -122,12 +122,12 @@ fun Route.optimizationRoutes(
                     val goalId = req.goalId.toLongOrNull()
                         ?: return@post call.respond(
                             HttpStatusCode.BadRequest,
-                            ErrorResponse("VALIDATION", "goalId invalido")
+                            ErrorResponse("VALIDATION", "goalId inválido")
                         )
                     if (goalRepository.findById(goalId, userId) == null) {
                         return@post call.respond(
                             HttpStatusCode.NotFound,
-                            ErrorResponse("NOT_FOUND", "Meta nao encontrada")
+                            ErrorResponse("NOT_FOUND", "Meta não encontrada")
                         )
                     }
                 }

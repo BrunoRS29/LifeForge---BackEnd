@@ -32,7 +32,7 @@ fun Route.userRoutes(repository: UserRepository) {
                 if (user == null) {
                     call.respond(
                         HttpStatusCode.NotFound,
-                        ErrorResponse("NOT_FOUND", "Usuario nao encontrado"),
+                        ErrorResponse("NOT_FOUND", "Usuário não encontrado"),
                     )
                 } else {
                     call.respond(user.toDto())
@@ -66,7 +66,7 @@ fun Route.userRoutes(repository: UserRepository) {
                 if (!updated) {
                     return@patch call.respond(
                         HttpStatusCode.NotFound,
-                        ErrorResponse("NOT_FOUND", "Usuario nao encontrado"),
+                        ErrorResponse("NOT_FOUND", "Usuário não encontrado"),
                     )
                 }
 
@@ -91,7 +91,7 @@ fun Route.userRoutes(repository: UserRepository) {
                 if (name.isEmpty() || name.length > 100) {
                     return@patch call.respond(
                         HttpStatusCode.BadRequest,
-                        ErrorResponse("VALIDATION", "name deve ter entre 1 e 100 caracteres"),
+                        ErrorResponse("VALIDATION", "O nome deve ter entre 1 e 100 caracteres"),
                     )
                 }
 
@@ -99,7 +99,7 @@ fun Route.userRoutes(repository: UserRepository) {
                 if (!updated) {
                     return@patch call.respond(
                         HttpStatusCode.NotFound,
-                        ErrorResponse("NOT_FOUND", "Usuario nao encontrado"),
+                        ErrorResponse("NOT_FOUND", "Usuário não encontrado"),
                     )
                 }
 

@@ -54,7 +54,7 @@ fun Route.incomeRoutes(
                 val receivedAt = runCatching { Instant.parse(req.receivedAt) }.getOrNull()
 
                 if (req.source.isBlank() || type == null || amount == null || amount <= BigDecimal.ZERO || receivedAt == null) {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("VALIDATION", "Dados da renda invalidos"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("VALIDATION", "Dados da receita inválidos"))
                     return@post
                 }
                 val income = repository.create(
@@ -89,7 +89,7 @@ fun Route.incomeRoutes(
                     val userId = call.userId()
                     val req = call.receive<IncomeScheduleRequest>()
                     val parsed = parseIncomeSchedule(req) ?: run {
-                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("VALIDATION", "Dados do schedule invalidos"))
+                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("VALIDATION", "Dados do agendamento inválidos"))
                         return@post
                     }
                     val schedule = scheduleRepository.createAndMaterialize(
@@ -109,12 +109,12 @@ fun Route.incomeRoutes(
                 put("/{id}") {
                     val userId = call.userId()
                     val id = call.parameters["id"]?.toLongOrNull() ?: run {
-                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("INVALID_ID", "ID invalido"))
+                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("INVALID_ID", "ID inválido"))
                         return@put
                     }
                     val req = call.receive<IncomeScheduleRequest>()
                     val parsed = parseIncomeSchedule(req) ?: run {
-                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("VALIDATION", "Dados do schedule invalidos"))
+                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("VALIDATION", "Dados do agendamento inválidos"))
                         return@put
                     }
                     val updated = scheduleRepository.updateAndRematerialize(
@@ -130,7 +130,7 @@ fun Route.incomeRoutes(
                         affect = call.affectParam(),
                     )
                     if (updated == null) {
-                        call.respond(HttpStatusCode.NotFound, ErrorResponse("NOT_FOUND", "Schedule nao encontrado"))
+                        call.respond(HttpStatusCode.NotFound, ErrorResponse("NOT_FOUND", "Agendamento não encontrado"))
                     } else {
                         call.respond(updated.toDto(repository.findByScheduleId(userId, id).size))
                     }
@@ -139,13 +139,13 @@ fun Route.incomeRoutes(
                 delete("/{id}") {
                     val userId = call.userId()
                     val id = call.parameters["id"]?.toLongOrNull() ?: run {
-                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("INVALID_ID", "ID invalido"))
+                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("INVALID_ID", "ID inválido"))
                         return@delete
                     }
                     if (scheduleRepository.delete(id, userId, call.affectParam())) {
                         call.respond(HttpStatusCode.NoContent)
                     } else {
-                        call.respond(HttpStatusCode.NotFound, ErrorResponse("NOT_FOUND", "Schedule nao encontrado"))
+                        call.respond(HttpStatusCode.NotFound, ErrorResponse("NOT_FOUND", "Agendamento não encontrado"))
                     }
                 }
             }
@@ -153,18 +153,18 @@ fun Route.incomeRoutes(
             get("/{id}") {
                 val userId = call.userId()
                 val id = call.parameters["id"]?.toLongOrNull() ?: run {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("INVALID_ID", "ID invalido"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("INVALID_ID", "ID inválido"))
                     return@get
                 }
                 val income = repository.findById(id, userId)
-                if (income == null) call.respond(HttpStatusCode.NotFound, ErrorResponse("NOT_FOUND", "Renda nao encontrada"))
+                if (income == null) call.respond(HttpStatusCode.NotFound, ErrorResponse("NOT_FOUND", "Receita não encontrada"))
                 else call.respond(income.toDto())
             }
 
             put("/{id}") {
                 val userId = call.userId()
                 val id = call.parameters["id"]?.toLongOrNull() ?: run {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("INVALID_ID", "ID invalido"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("INVALID_ID", "ID inválido"))
                     return@put
                 }
                 val req = call.receive<IncomeRequest>()
@@ -172,7 +172,7 @@ fun Route.incomeRoutes(
                 val amount = runCatching { BigDecimal(req.amount) }.getOrNull()
                 val receivedAt = runCatching { Instant.parse(req.receivedAt) }.getOrNull()
                 if (req.source.isBlank() || type == null || amount == null || amount <= BigDecimal.ZERO || receivedAt == null) {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("VALIDATION", "Dados da renda invalidos"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("VALIDATION", "Dados da receita inválidos"))
                     return@put
                 }
                 val updated = repository.update(
@@ -184,18 +184,18 @@ fun Route.incomeRoutes(
                     recurring = req.recurring,
                     receivedAt = receivedAt,
                 )
-                if (updated == null) call.respond(HttpStatusCode.NotFound, ErrorResponse("NOT_FOUND", "Renda nao encontrada"))
+                if (updated == null) call.respond(HttpStatusCode.NotFound, ErrorResponse("NOT_FOUND", "Receita não encontrada"))
                 else call.respond(updated.toDto())
             }
 
             delete("/{id}") {
                 val userId = call.userId()
                 val id = call.parameters["id"]?.toLongOrNull() ?: run {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("INVALID_ID", "ID invalido"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("INVALID_ID", "ID inválido"))
                     return@delete
                 }
                 if (repository.delete(id, userId)) call.respond(HttpStatusCode.NoContent)
-                else call.respond(HttpStatusCode.NotFound, ErrorResponse("NOT_FOUND", "Renda nao encontrada"))
+                else call.respond(HttpStatusCode.NotFound, ErrorResponse("NOT_FOUND", "Receita não encontrada"))
             }
         }
     }

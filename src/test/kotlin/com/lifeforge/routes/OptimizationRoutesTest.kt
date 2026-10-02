@@ -315,7 +315,7 @@ class OptimizationRoutesTest {
         body.weights.values.forEach { it shouldBeGreaterThanOrEqualTo 0.0 }
         body.riskScore shouldBeGreaterThanOrEqualTo 0.0
         body.expectedReturnAnnual shouldBeGreaterThan 0.0
-        body.rationale.shouldContain("moderate")
+        body.rationale.shouldContain("moderado")
     }
 
     @Test

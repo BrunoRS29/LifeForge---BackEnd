@@ -4,6 +4,8 @@ import com.lifeforge.dto.ErrorResponse
 import io.ktor.http.*
 import io.ktor.serialization.JsonConvertException
 import io.ktor.server.application.*
+import io.ktor.server.plugins.BadRequestException
+import io.ktor.server.plugins.NotFoundException
 import io.ktor.server.plugins.calllogging.*
 import io.ktor.server.plugins.cors.routing.*
 import io.ktor.server.plugins.defaultheaders.*
@@ -38,6 +40,7 @@ fun Application.configureHTTP() {
         allowMethod(HttpMethod.Get)
         allowMethod(HttpMethod.Post)
         allowMethod(HttpMethod.Put)
+        allowMethod(HttpMethod.Patch)
         allowMethod(HttpMethod.Delete)
         allowHeader(HttpHeaders.Authorization)
         allowHeader(HttpHeaders.ContentType)
@@ -52,6 +55,31 @@ fun Application.configureHTTP() {
     }
 
     install(StatusPages) {
+
+        // Corpo ausente, JSON malformado ou campo com tipo errado: erro do
+        // CLIENTE (400), nao do servidor. Sem este handler, caia no 500.
+        exception<BadRequestException> { call: ApplicationCall, _: BadRequestException ->
+            call.respond(
+                HttpStatusCode.BadRequest,
+                ErrorResponse("VALIDATION", "Requisição inválida: corpo ausente ou malformado"),
+            )
+        }
+
+        // Pre-condicoes de dominio (ex.: require(...) de MonteCarloParameters)
+        // violadas por dados enviados pelo cliente.
+        exception<IllegalArgumentException> { call: ApplicationCall, cause: IllegalArgumentException ->
+            call.respond(
+                HttpStatusCode.BadRequest,
+                ErrorResponse("VALIDATION", cause.message ?: "Parâmetros inválidos"),
+            )
+        }
+
+        exception<NotFoundException> { call: ApplicationCall, _: NotFoundException ->
+            call.respond(
+                HttpStatusCode.NotFound,
+                ErrorResponse("NOT_FOUND", "Recurso não encontrado"),
+            )
+        }
 
         exception<Throwable> { call: ApplicationCall, cause: Throwable ->
             // Loga o stack trace completo (diagnostico) mas NAO o vaza ao

@@ -3,6 +3,7 @@ package com.lifeforge.routes
 import com.lifeforge.domain.model.Simulation
 import com.lifeforge.domain.repository.GoalRepository
 import com.lifeforge.domain.repository.SimulationRepository
+import com.lifeforge.dto.ErrorResponse
 import com.lifeforge.dto.HistogramBucketDto
 import com.lifeforge.dto.RunSimulationRequest
 import com.lifeforge.dto.SimulationResultResponse
@@ -18,7 +19,6 @@ import io.ktor.server.auth.jwt.JWTPrincipal
 import io.ktor.server.auth.principal
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
-import io.ktor.server.response.respondText
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.delete
 import io.ktor.server.routing.get
@@ -57,11 +57,11 @@ fun Route.simulationRoutes(
                 val userId = call.userId()
                 val request = call.receive<RunSimulationRequest>()
                 val goalId = request.goalId.toLongOrNull()
-                    ?: return@post call.respond(HttpStatusCode.BadRequest, mapOf("error" to "goalId invalido"))
+                    ?: return@post call.respond(HttpStatusCode.BadRequest, ErrorResponse("VALIDATION", "goalId inválido"))
 
                 val goal = goalRepository.findById(goalId, userId)
                 if (goal == null) {
-                    return@post call.respond(HttpStatusCode.NotFound, mapOf("error" to "Meta nao encontrada"))
+                    return@post call.respond(HttpStatusCode.NotFound, ErrorResponse("NOT_FOUND", "Meta não encontrada"))
                 }
 
                 val parameters = MonteCarloParameters(
@@ -76,6 +76,9 @@ fun Route.simulationRoutes(
                     inflationAnnual = request.inflationAnnual,
                     numSimulations = request.numSimulations,
                     seed = request.seed ?: System.currentTimeMillis(),
+                    unexpectedExpenseAnnualFrequency = request.unexpectedExpenseAnnualFrequency,
+                    unexpectedExpenseMeanAmount = request.unexpectedExpenseMeanAmount,
+                    incomeVolatilityAnnual = request.incomeVolatilityAnnual,
                 )
 
                 val result = withContext(Dispatchers.Default) {
@@ -111,19 +114,26 @@ fun Route.simulationRoutes(
             get("/{id}") {
                 val userId = call.userId()
                 val id = call.parameters["id"]?.toLongOrNull()
-                    ?: return@get call.respond(HttpStatusCode.BadRequest, mapOf("error" to "id invalido"))
+                    ?: return@get call.respond(HttpStatusCode.BadRequest, ErrorResponse("INVALID_ID", "ID inválido"))
 
                 val simulation = simulationRepository.findById(id)
-                    ?: return@get call.respond(HttpStatusCode.NotFound)
+                    ?: return@get call.respond(HttpStatusCode.NotFound, ErrorResponse("NOT_FOUND", "Simulação não encontrada"))
 
                 val goal = goalRepository.findById(simulation.goalId, userId)
                 if (goal == null) {
-                    return@get call.respond(HttpStatusCode.NotFound)
+                    return@get call.respond(HttpStatusCode.NotFound, ErrorResponse("NOT_FOUND", "Meta não encontrada"))
                 }
 
-                call.respondText(
-                    text = json.encodeToString(simulation.result),
-                    contentType = io.ktor.http.ContentType.Application.Json,
+                // O resultado e gravado ANTES de o banco atribuir o id (id "0" no
+                // JSON persistido). Reidratamos id/goalId/createdAt a partir da
+                // linha da tabela para o cliente receber o identificador real.
+                val stored = json.decodeFromJsonElement(SimulationResultResponse.serializer(), simulation.result)
+                call.respond(
+                    stored.copy(
+                        id = simulation.id.toString(),
+                        goalId = simulation.goalId.toString(),
+                        createdAt = simulation.createdAt.toString(),
+                    ),
                 )
             }
 
@@ -131,11 +141,11 @@ fun Route.simulationRoutes(
             get("/by-goal/{goalId}") {
                 val userId = call.userId()
                 val goalId = call.parameters["goalId"]?.toLongOrNull()
-                    ?: return@get call.respond(HttpStatusCode.BadRequest, mapOf("error" to "goalId invalido"))
+                    ?: return@get call.respond(HttpStatusCode.BadRequest, ErrorResponse("VALIDATION", "goalId inválido"))
 
                 val goal = goalRepository.findById(goalId, userId)
                 if (goal == null) {
-                    return@get call.respond(HttpStatusCode.NotFound)
+                    return@get call.respond(HttpStatusCode.NotFound, ErrorResponse("NOT_FOUND", "Meta não encontrada"))
                 }
 
                 val simulations = simulationRepository.findByGoalId(goalId)
@@ -158,14 +168,14 @@ fun Route.simulationRoutes(
             delete("/{id}") {
                 val userId = call.userId()
                 val id = call.parameters["id"]?.toLongOrNull()
-                    ?: return@delete call.respond(HttpStatusCode.BadRequest, mapOf("error" to "id invalido"))
+                    ?: return@delete call.respond(HttpStatusCode.BadRequest, ErrorResponse("INVALID_ID", "ID inválido"))
 
                 val simulation = simulationRepository.findById(id)
-                    ?: return@delete call.respond(HttpStatusCode.NotFound)
+                    ?: return@delete call.respond(HttpStatusCode.NotFound, ErrorResponse("NOT_FOUND", "Simulação não encontrada"))
 
                 val goal = goalRepository.findById(simulation.goalId, userId)
                 if (goal == null) {
-                    return@delete call.respond(HttpStatusCode.NotFound)
+                    return@delete call.respond(HttpStatusCode.NotFound, ErrorResponse("NOT_FOUND", "Meta não encontrada"))
                 }
 
                 simulationRepository.deleteById(id)

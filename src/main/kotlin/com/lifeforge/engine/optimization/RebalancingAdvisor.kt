@@ -159,19 +159,26 @@ class RebalancingAdvisor(
     ): String {
         val timeHint = when {
             monthsToGoal >= 240 -> "horizonte longo permite assumir mais risco"
-            monthsToGoal >= 60  -> "horizonte medio mantem equilibrio"
-            else                -> "horizonte curto exige preservacao"
+            monthsToGoal >= 60  -> "horizonte médio mantém o equilíbrio"
+            else                -> "horizonte curto exige preservação do capital"
         }
         val progressHint = when {
             progress >= 0.80 -> "perto da meta, foco em preservar"
-            progress >= 0.40 -> "progresso intermediario"
-            else             -> "longe da meta, busca crescimento"
+            progress >= 0.40 -> "progresso intermediário"
+            else             -> "longe da meta, busca de crescimento"
         }
         val direction = when {
-            riskScore > baseRisk + 0.05 -> "acima do perfil base"
-            riskScore < baseRisk - 0.05 -> "abaixo do perfil base"
-            else                        -> "alinhado ao perfil base"
+            riskScore > baseRisk + 0.05 -> "acima do perfil-base"
+            riskScore < baseRisk - 0.05 -> "abaixo do perfil-base"
+            else                        -> "alinhado ao perfil-base"
         }
-        return "Perfil ${profile.name.lowercase()} ($direction): $timeHint; $progressHint."
+        return "Perfil ${profile.label()} ($direction): $timeHint; $progressHint."
     }
+}
+
+/** Rotulo em portugues do perfil de risco, igual ao exibido no app. */
+private fun RiskProfile.label(): String = when (this) {
+    RiskProfile.CONSERVATIVE -> "conservador"
+    RiskProfile.MODERATE -> "moderado"
+    RiskProfile.AGGRESSIVE -> "arrojado"
 }

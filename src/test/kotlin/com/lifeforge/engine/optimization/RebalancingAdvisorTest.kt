@@ -69,7 +69,7 @@ class RebalancingAdvisorTest : StringSpec({
 
     "rationale contem o nome do perfil em letras minusculas" {
         val rec = standardCall(profile = RiskProfile.AGGRESSIVE)
-        rec.rationale.shouldContain("aggressive")
+        rec.rationale.shouldContain("arrojado")
     }
 
     // ----------------------------------------------------------------

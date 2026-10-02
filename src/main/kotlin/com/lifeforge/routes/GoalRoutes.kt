@@ -46,7 +46,7 @@ fun Route.goalRoutes(repository: GoalRepository) {
                 val parsed = parseGoalRequest(req) ?: run {
                     call.respond(
                         HttpStatusCode.BadRequest,
-                        ErrorResponse("VALIDATION", "Dados da meta invalidos")
+                        ErrorResponse("VALIDATION", "Dados da meta inválidos")
                     )
                     return@post
                 }
@@ -64,12 +64,12 @@ fun Route.goalRoutes(repository: GoalRepository) {
             get("/{id}") {
                 val userId = call.userId()
                 val id = call.parameters["id"]?.toLongOrNull() ?: run {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("INVALID_ID", "ID invalido"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("INVALID_ID", "ID inválido"))
                     return@get
                 }
                 val goal = repository.findById(id, userId)
                 if (goal == null) {
-                    call.respond(HttpStatusCode.NotFound, ErrorResponse("NOT_FOUND", "Meta nao encontrada"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("NOT_FOUND", "Meta não encontrada"))
                 } else {
                     call.respond(goal.toDto())
                 }
@@ -78,14 +78,14 @@ fun Route.goalRoutes(repository: GoalRepository) {
             put("/{id}") {
                 val userId = call.userId()
                 val id = call.parameters["id"]?.toLongOrNull() ?: run {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("INVALID_ID", "ID invalido"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("INVALID_ID", "ID inválido"))
                     return@put
                 }
                 val req = call.receive<GoalRequest>()
                 val parsed = parseGoalRequest(req) ?: run {
                     call.respond(
                         HttpStatusCode.BadRequest,
-                        ErrorResponse("VALIDATION", "Dados da meta invalidos")
+                        ErrorResponse("VALIDATION", "Dados da meta inválidos")
                     )
                     return@put
                 }
@@ -99,7 +99,7 @@ fun Route.goalRoutes(repository: GoalRepository) {
                     priority = parsed.priority
                 )
                 if (goal == null) {
-                    call.respond(HttpStatusCode.NotFound, ErrorResponse("NOT_FOUND", "Meta nao encontrada"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("NOT_FOUND", "Meta não encontrada"))
                 } else {
                     call.respond(goal.toDto())
                 }
@@ -108,12 +108,12 @@ fun Route.goalRoutes(repository: GoalRepository) {
             delete("/{id}") {
                 val userId = call.userId()
                 val id = call.parameters["id"]?.toLongOrNull() ?: run {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("INVALID_ID", "ID invalido"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("INVALID_ID", "ID inválido"))
                     return@delete
                 }
                 val deleted = repository.delete(id, userId)
                 if (deleted) call.respond(HttpStatusCode.NoContent)
-                else call.respond(HttpStatusCode.NotFound, ErrorResponse("NOT_FOUND", "Meta nao encontrada"))
+                else call.respond(HttpStatusCode.NotFound, ErrorResponse("NOT_FOUND", "Meta não encontrada"))
             }
         }
     }

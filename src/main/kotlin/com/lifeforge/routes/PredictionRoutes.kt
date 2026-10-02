@@ -220,19 +220,19 @@ suspend fun io.ktor.server.application.ApplicationCall.respondMlError(error: Thr
     when (error) {
         is MlValidationError -> respond(
             HttpStatusCode.UnprocessableEntity,
-            ErrorResponse(error.code, error.message ?: "Erro de validacao no ML"),
+            ErrorResponse(error.code, error.message ?: "Erro de validação no serviço de IA"),
         )
         is MlUnavailableError -> respond(
             HttpStatusCode.ServiceUnavailable,
-            ErrorResponse(error.code, error.message ?: "Servico de ML indisponivel"),
+            ErrorResponse(error.code, error.message ?: "Serviço de IA indisponível"),
         )
         is MlInternalError -> respond(
             HttpStatusCode.BadGateway,
-            ErrorResponse(error.code, error.message ?: "Erro no servico de ML"),
+            ErrorResponse(error.code, error.message ?: "Erro no serviço de IA"),
         )
         is MlClientException -> respond(
             HttpStatusCode.BadGateway,
-            ErrorResponse(error.code, error.message ?: "Erro no servico de ML"),
+            ErrorResponse(error.code, error.message ?: "Erro no serviço de IA"),
         )
         else -> respond(
             HttpStatusCode.InternalServerError,

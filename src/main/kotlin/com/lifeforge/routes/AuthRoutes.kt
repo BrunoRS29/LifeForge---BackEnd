@@ -40,7 +40,7 @@ fun Route.authRoutes(
             if (userRepository.findByEmail(email) != null) {
                 call.respond(
                     HttpStatusCode.Conflict,
-                    ErrorResponse("EMAIL_TAKEN", "Email ja cadastrado")
+                    ErrorResponse("EMAIL_TAKEN", "E-mail já cadastrado")
                 )
                 return@post
             }
@@ -62,7 +62,7 @@ fun Route.authRoutes(
             if (req.email.isBlank() || req.password.isBlank()) {
                 call.respond(
                     HttpStatusCode.BadRequest,
-                    ErrorResponse("VALIDATION", "Email e senha sao obrigatorios")
+                    ErrorResponse("VALIDATION", "E-mail e senha são obrigatórios")
                 )
                 return@post
             }
@@ -71,7 +71,7 @@ fun Route.authRoutes(
             if (pair == null || !PasswordHasher.verify(req.password, pair.second)) {
                 call.respond(
                     HttpStatusCode.Unauthorized,
-                    ErrorResponse("INVALID_CREDENTIALS", "Email ou senha invalidos")
+                    ErrorResponse("INVALID_CREDENTIALS", "E-mail ou senha inválidos")
                 )
                 return@post
             }
@@ -83,9 +83,9 @@ fun Route.authRoutes(
 }
 
 private fun validateRegister(req: RegisterRequest): List<String> = buildList {
-    if (req.email.isBlank() || !req.email.contains("@")) add("Email invalido")
-    if (req.name.isBlank()) add("Nome e obrigatorio")
-    if (req.password.length < 8) add("Senha deve ter ao menos 8 caracteres")
+    if (req.email.isBlank() || !req.email.contains("@")) add("E-mail inválido")
+    if (req.name.isBlank()) add("Nome é obrigatório")
+    if (req.password.length < 8) add("A senha deve ter ao menos 8 caracteres")
 }
 
 private fun com.lifeforge.domain.model.User.toDto(): UserDto = UserDto(
