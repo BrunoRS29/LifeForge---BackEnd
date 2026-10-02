@@ -1384,6 +1384,31 @@ components:
           items: { $ref: "#/components/schemas/TrajectoryBandDto" }
         executionTimeMs: { type: integer, format: int64 }
         createdAt: { type: string, format: date-time }
+        inputs:
+          allOf: [{ $ref: "#/components/schemas/SimulationInputsDto" }]
+          nullable: true
+
+    SimulationInputsDto:
+      type: object
+      description: >
+        Premissas com que a simulação foi executada (a "estratégia"), para
+        comparação lado a lado. `calibrated` indica aporte derivado das
+        predições (Simular com IA).
+      properties:
+        initialCapital: { type: number, format: double }
+        monthlyContribution: { type: number, format: double }
+        expectedReturnAnnual: { type: number, format: double }
+        volatilityAnnual: { type: number, format: double }
+        horizonMonths: { type: integer }
+        targetAmount: { type: number, format: double }
+        unemploymentProbAnnual: { type: number, format: double }
+        unemploymentDurationMonths: { type: integer }
+        inflationAnnual: { type: number, format: double }
+        unexpectedExpenseAnnualFrequency: { type: number, format: double }
+        unexpectedExpenseMeanAmount: { type: number, format: double }
+        incomeVolatilityAnnual: { type: number, format: double }
+        numSimulations: { type: integer }
+        calibrated: { type: boolean }
 
     SimulationSummaryResponse:
       type: object
@@ -1395,6 +1420,9 @@ components:
         median: { type: number, format: double }
         targetAmount: { type: number, format: double }
         createdAt: { type: string, format: date-time }
+        inputs:
+          allOf: [{ $ref: "#/components/schemas/SimulationInputsDto" }]
+          nullable: true
 
     CalibrationSummaryResponse:
       type: object

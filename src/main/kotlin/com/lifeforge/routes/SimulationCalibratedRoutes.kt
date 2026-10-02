@@ -197,7 +197,7 @@ fun Route.simulationCalibratedRoutes(
                             simulationId = persisted.id,
                             goalId = goalId,
                             createdAt = persisted.createdAt.toString(),
-                        ),
+                        ).copy(inputs = calibration.parameters.toInputsDto(calibrated = true)),
                         calibration = CalibrationSummaryResponse(
                             incomePredictionId = inputs.incomePrediction?.prediction?.id,
                             expensePredictionId = inputs.expensePrediction?.prediction?.id,

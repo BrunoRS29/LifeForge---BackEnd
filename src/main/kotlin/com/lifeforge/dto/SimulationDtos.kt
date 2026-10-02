@@ -62,6 +62,32 @@ data class SimulationResultResponse(
     val trajectory: List<TrajectoryBandDto> = emptyList(),
     val executionTimeMs: Long,
     val createdAt: String, // ISO-8601
+    // Premissas da rodada (a "estrategia") - permitem comparar simulacoes lado
+    // a lado. Nulo apenas para registros cujas premissas nao puderam ser lidas.
+    val inputs: SimulationInputsDto? = null,
+)
+
+/**
+ * Premissas com que uma simulacao foi executada. Mesmo formato para a rota
+ * classica e para a calibrada por IA (que informa `calibrated = true`: o
+ * aporte foi derivado das predicoes de renda e despesa).
+ */
+@Serializable
+data class SimulationInputsDto(
+    val initialCapital: Double,
+    val monthlyContribution: Double,
+    val expectedReturnAnnual: Double,
+    val volatilityAnnual: Double,
+    val horizonMonths: Int,
+    val targetAmount: Double,
+    val unemploymentProbAnnual: Double = 0.0,
+    val unemploymentDurationMonths: Int = 6,
+    val inflationAnnual: Double = 0.0,
+    val unexpectedExpenseAnnualFrequency: Double = 0.0,
+    val unexpectedExpenseMeanAmount: Double = 0.0,
+    val incomeVolatilityAnnual: Double = 0.0,
+    val numSimulations: Int = 10_000,
+    val calibrated: Boolean = false,
 )
 
 @Serializable
@@ -97,4 +123,5 @@ data class SimulationSummaryResponse(
     val median: Double,
     val targetAmount: Double,
     val createdAt: String,
+    val inputs: SimulationInputsDto? = null,
 )

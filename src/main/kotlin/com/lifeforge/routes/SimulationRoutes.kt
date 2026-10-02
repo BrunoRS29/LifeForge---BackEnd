@@ -106,7 +106,7 @@ fun Route.simulationRoutes(
                         simulationId = created.id,
                         goalId = goalId,
                         createdAt = created.createdAt.toString(),
-                    ),
+                    ).copy(inputs = parameters.toInputsDto(calibrated = false)),
                 )
             }
 
@@ -133,6 +133,7 @@ fun Route.simulationRoutes(
                         id = simulation.id.toString(),
                         goalId = simulation.goalId.toString(),
                         createdAt = simulation.createdAt.toString(),
+                        inputs = simulation.parameters.toStoredInputsOrNull(),
                     ),
                 )
             }
@@ -159,6 +160,7 @@ fun Route.simulationRoutes(
                         median = parsed.median,
                         targetAmount = parsed.targetAmount,
                         createdAt = sim.createdAt.toString(),
+                        inputs = sim.parameters.toStoredInputsOrNull(),
                     )
                 }
                 call.respond(summaries)
