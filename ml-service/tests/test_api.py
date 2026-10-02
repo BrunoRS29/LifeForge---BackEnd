@@ -161,12 +161,10 @@ class TestPredictExpenses:
         assert body["model_name"] == "EXPENSE_RANDOM_FOREST"
         assert body["horizon_months"] == 1
 
-        # Sempre retorna as 7 categorias canonicas
+        # Preve apenas as categorias presentes no historico: prever categorias
+        # sem historico inflava o total da despesa na simulacao calibrada.
         cats = {p["category"] for p in body["by_category"]}
-        assert cats == {
-            "HOUSING", "FOOD", "TRANSPORT", "HEALTH",
-            "EDUCATION", "LEISURE", "OTHER",
-        }
+        assert cats == {"HOUSING", "FOOD", "TRANSPORT", "LEISURE"}
 
         total = sum(p["predicted_amount"] for p in body["by_category"])
         assert abs(body["expected_monthly_expense"] - total) < 1e-6

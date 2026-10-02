@@ -6,6 +6,7 @@ Microsserviço de IA preditiva do LifeForge. Treina modelos personalizados sobre
 
 - **FastAPI 0.115** — framework HTTP assíncrono
 - **scikit-learn 1.5** — Linear Regression + Random Forest
+- **statsmodels 0.14** — ARIMA para a série de patrimônio (recuo para tendência linear)
 - **pandas / numpy** — pré-processamento e feature engineering
 - **Pydantic 2** — validação de payloads e settings
 - **pytest** — testes unitários e de integração
@@ -16,7 +17,8 @@ Microsserviço de IA preditiva do LifeForge. Treina modelos personalizados sobre
 |--------|------|-----------|
 | `GET`  | `/health` | Healthcheck (consumido pelo Docker) |
 | `POST` | `/predict/income` | Regressão linear sobre histórico de renda |
-| `POST` | `/predict/expenses` | Random Forest sobre despesas categorizadas |
+| `POST` | `/predict/expenses` | Random Forest sobre despesas categorizadas (prevê só categorias com histórico) |
+| `POST` | `/predict/wealth` | ARIMA sobre a série mensal de patrimônio acumulado |
 | `GET`  | `/models/metrics` | MAE / RMSE / R² dos modelos treinados |
 
 A documentação interativa (Swagger UI) fica em `/docs` quando o serviço está rodando.
@@ -45,7 +47,7 @@ Roda automaticamente junto com `postgres` e `backend` via `docker compose up` (v
 pytest -v
 ```
 
-Cobre testes unitários dos dois modelos preditivos + testes de integração da API (HTTP status, validação, exception handlers).
+Cobre testes unitários dos três modelos preditivos (renda, despesas e patrimônio) + testes de integração da API (HTTP status, validação, exception handlers). A configuração fica em `pytest.ini`, e os testes rodam no CI do repositório (job `ml-service`).
 
 ## Decisões arquiteturais
 
@@ -75,7 +77,8 @@ ml-service/
 │   ├── models/
 │   │   ├── base.py          # Interface abstrata
 │   │   ├── income_model.py  # Regressão Linear
-│   │   └── expense_model.py # Random Forest
+│   │   ├── expense_model.py # Random Forest
+│   │   └── wealth_model.py  # ARIMA (série de patrimônio)
 │   ├── services/
 │   │   └── registry.py      # Singleton thread-safe de modelos
 │   ├── routes/
@@ -88,8 +91,10 @@ ml-service/
 │   ├── conftest.py          # Fixtures (geradores sintéticos)
 │   ├── test_income_model.py
 │   ├── test_expense_model.py
+│   ├── test_wealth_model.py
 │   └── test_api.py          # Integração via TestClient
 ├── requirements.txt
+├── pytest.ini
 ├── Dockerfile
 └── README.md
 ```
