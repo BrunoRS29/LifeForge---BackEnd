@@ -2,15 +2,25 @@ openapi: 3.0.3
 info:
   title: LifeForge API
   description: >
-    API REST do LifeForge - plataforma de planejamento de vida com modelagem
-    probabilistica e simulacao de Monte Carlo. Backend Ktor (Kotlin) com
-    persistencia PostgreSQL e microsservico Python de ML para predicoes.
+    API REST do LifeForge — plataforma de planejamento de vida com modelagem
+    probabilística e Simulação de Monte Carlo. Backend Ktor (Kotlin) com
+    persistência PostgreSQL e microsserviço Python de aprendizado de máquina
+    para as predições.
 
-    Autenticacao: a maioria dos endpoints exige um JWT no header
-    `Authorization: Bearer <token>`, obtido em `/api/v1/auth/login`.
-  version: 0.1.0
+
+    **Autenticação:** as rotas de domínio exigem um JWT no cabeçalho
+    `Authorization: Bearer <token>`, obtido em `/api/v1/auth/login` ou
+    `/api/v1/auth/register`. São públicas apenas autenticação, `/health`,
+    `/api/v1/reference-data`, `/metrics`, `/docs` e `/openapi.yaml`.
+
+
+    **Convenções:** valores monetários de cadastro trafegam como texto decimal
+    (`"1500.00"`) para preservar a precisão; datas em ISO-8601 (`Instant`, UTC);
+    enums pelo nome. Listas aceitam paginação opcional `?limit=` (1–500) e
+    `?offset=`. Erros seguem sempre `ErrorResponse { error, message }`.
+  version: 1.0.0
   contact:
-    name: LifeForge (TCC - Engenharia de Computacao)
+    name: LifeForge (TCC — Engenharia de Computação, EEP)
 
 servers:
   - url: http://localhost:8080
@@ -18,29 +28,35 @@ servers:
 
 tags:
   - name: System
-    description: Healthcheck e metadados
+    description: Saúde do serviço, métricas e documentação
   - name: Auth
-    description: Registro e login (publicos)
+    description: Registro e login (públicos, com rate limit)
+  - name: Users
+    description: Usuário autenticado e perfil estendido
+  - name: Reference
+    description: Base de estatísticas de referência (pública)
+  - name: Dashboard
+    description: Painel consolidado
   - name: Goals
-    description: Metas financeiras do usuario
+    description: Metas financeiras do usuário
   - name: Finance
-    description: Receitas, despesas e ativos
+    description: Receitas, despesas, agendamentos recorrentes, ativos e importação
   - name: Simulation
-    description: Simulacao de Monte Carlo (classica e calibrada por IA)
+    description: Simulação de Monte Carlo (clássica e calibrada por IA)
   - name: Optimization
-    description: Otimizacao de aporte, prazo e alocacao
+    description: Otimização de aporte, prazo e alocação
   - name: Predictions
-    description: Predicoes do microsservico de ML (renda, despesas, patrimonio)
+    description: Predições do microsserviço de aprendizado de máquina
 
 paths:
   /health:
     get:
       tags: [System]
-      summary: Healthcheck do backend e do microsservico ML
+      summary: Saúde do backend e do microsserviço de ML
       security: []
       responses:
         "200":
-          description: Servico no ar
+          description: Serviço no ar (o campo `ml` indica se o microsserviço responde)
           content:
             application/json:
               schema:
@@ -48,36 +64,67 @@ paths:
                 properties:
                   status: { type: string, example: ok }
                   service: { type: string, example: lifeforge-backend }
-                  ml: { type: string, example: ok }
+                  ml: { type: string, enum: [ok, down] }
 
+  /metrics:
+    get:
+      tags: [System]
+      summary: Métricas no formato Prometheus (Micrometer)
+      security: []
+      responses:
+        "200":
+          description: Métricas em texto (exposition format do Prometheus)
+          content:
+            text/plain: { schema: { type: string } }
+
+  /docs:
+    get:
+      tags: [System]
+      summary: Swagger UI desta especificação
+      security: []
+      responses:
+        "200": { description: Página HTML do Swagger UI }
+
+  /openapi.yaml:
+    get:
+      tags: [System]
+      summary: Esta especificação OpenAPI
+      security: []
+      responses:
+        "200":
+          description: Documento OpenAPI 3
+          content:
+            application/yaml: { schema: { type: string } }
+
+  # ===================== Auth =====================
   /api/v1/auth/register:
     post:
       tags: [Auth]
-      summary: Registra um novo usuario e retorna o JWT
+      summary: Registra um novo usuário e retorna o JWT
       security: []
       requestBody:
         required: true
         content:
           application/json:
-            schema:
-              $ref: "#/components/schemas/RegisterRequest"
+            schema: { $ref: "#/components/schemas/RegisterRequest" }
       responses:
         "201":
-          description: Usuario criado
+          description: Usuário criado
           content:
             application/json:
               schema: { $ref: "#/components/schemas/AuthResponse" }
         "400": { $ref: "#/components/responses/ValidationError" }
         "409":
-          description: Email ja cadastrado
+          description: E-mail já cadastrado (`EMAIL_TAKEN`)
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
 
   /api/v1/auth/login:
     post:
       tags: [Auth]
-      summary: Autentica e retorna o JWT
+      summary: Autentica e retorna o JWT (validade de 7 dias)
       security: []
       requestBody:
         required: true
@@ -90,19 +137,142 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/AuthResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
         "401":
-          description: Credenciais invalidas
+          description: Credenciais inválidas (`INVALID_CREDENTIALS`)
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
 
+  # ===================== Users / Profile =====================
+  /api/v1/users/me:
+    get:
+      tags: [Users]
+      summary: Dados do usuário autenticado
+      responses:
+        "200":
+          description: Usuário
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserDto" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/users/me/risk-profile:
+    patch:
+      tags: [Users]
+      summary: Altera o perfil de risco do usuário
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [riskProfile]
+              properties:
+                riskProfile: { $ref: "#/components/schemas/RiskProfile" }
+      responses:
+        "200":
+          description: Usuário atualizado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserDto" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+
+  /api/v1/users/me/name:
+    patch:
+      tags: [Users]
+      summary: Altera o nome de exibição (1 a 100 caracteres)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string, example: Gabriel Innocêncio }
+      responses:
+        "200":
+          description: Usuário atualizado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserDto" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+
+  /api/v1/profile:
+    get:
+      tags: [Users]
+      summary: Perfil estendido (documento JSONB; `{}` se ainda não preenchido)
+      responses:
+        "200":
+          description: Perfil
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserProfile" }
+    put:
+      tags: [Users]
+      summary: Substitui o perfil estendido (todos os campos são opcionais)
+      description: >
+        O documento é gravado como JSONB, o que permite evoluir o conjunto de
+        campos sem alteração de esquema. Pela estratégia de sobreposição, os
+        valores informados prevalecem sobre a base de referência nas projeções.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UserProfile" }
+      responses:
+        "200":
+          description: Perfil salvo
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserProfile" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+
+  # ===================== Reference / Dashboard =====================
+  /api/v1/reference-data:
+    get:
+      tags: [Reference]
+      summary: Premissas de calibração (inflação, retornos por perfil, desemprego por vínculo…)
+      description: >
+        Valores anuais em fração (0.045 = 4,5%). Fontes: Banco Central do Brasil
+        (SGS), B3, ANBIMA, IBGE (PNAD Contínua, Tábuas de Mortalidade, POF) e FIPE.
+      security: []
+      responses:
+        "200":
+          description: Base de referência
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReferenceDataResponse" }
+
+  /api/v1/dashboard:
+    get:
+      tags: [Dashboard]
+      summary: Indicadores consolidados (patrimônio, renda e despesa recorrentes, metas)
+      description: >
+        Renda mensal = lançamentos de receita recorrentes + renda estimada dos
+        ativos (valor × retorno esperado ÷ 12); despesa mensal = lançamentos de
+        despesa recorrentes. `savingsRate` em pontos percentuais.
+      responses:
+        "200":
+          description: Painel
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DashboardResponse" }
+
+  # ===================== Goals =====================
   /api/v1/goals:
     get:
       tags: [Goals]
-      summary: Lista as metas do usuario autenticado
+      summary: Lista as metas do usuário
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
       responses:
         "200":
-          description: Lista de metas
+          description: Metas
           content:
             application/json:
               schema:
@@ -110,7 +280,7 @@ paths:
                 items: { $ref: "#/components/schemas/GoalDto" }
     post:
       tags: [Goals]
-      summary: Cria uma nova meta
+      summary: Cria uma meta
       requestBody:
         required: true
         content:
@@ -126,13 +296,10 @@ paths:
 
   /api/v1/goals/{id}:
     parameters:
-      - name: id
-        in: path
-        required: true
-        schema: { type: integer, format: int64 }
+      - $ref: "#/components/parameters/Id"
     get:
       tags: [Goals]
-      summary: Recupera uma meta por id
+      summary: Recupera uma meta
       responses:
         "200":
           description: Meta
@@ -154,21 +321,26 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/GoalDto" }
+        "400": { $ref: "#/components/responses/ValidationError" }
         "404": { $ref: "#/components/responses/NotFound" }
     delete:
       tags: [Goals]
-      summary: Remove uma meta
+      summary: Remove uma meta (e suas simulações)
       responses:
         "204": { description: Removida }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  # ===================== Incomes =====================
   /api/v1/incomes:
     get:
       tags: [Finance]
-      summary: Lista receitas do usuario
+      summary: Lista as receitas
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
       responses:
         "200":
-          description: Lista de receitas
+          description: Receitas
           content:
             application/json:
               schema:
@@ -176,7 +348,7 @@ paths:
                 items: { $ref: "#/components/schemas/IncomeDto" }
     post:
       tags: [Finance]
-      summary: Cria uma receita (pontual; use /schedules para recorrencia)
+      summary: Cria uma receita avulsa (para recorrência, use /schedules)
       requestBody:
         required: true
         content:
@@ -188,15 +360,73 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/IncomeDto" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+    delete:
+      tags: [Finance]
+      summary: Remove TODAS as receitas do usuário
+      responses:
+        "200":
+          description: Quantidade removida
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DeletedCount" }
+
+  /api/v1/incomes/{id}:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    get:
+      tags: [Finance]
+      summary: Recupera uma receita
+      responses:
+        "200":
+          description: Receita
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IncomeDto" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [Finance]
+      summary: Atualiza uma receita
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/IncomeRequest" }
+      responses:
+        "200":
+          description: Receita atualizada
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IncomeDto" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [Finance]
+      summary: Remove uma receita
+      responses:
+        "204": { description: Removida }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   /api/v1/incomes/schedules:
+    get:
+      tags: [Finance]
+      summary: Lista os agendamentos de receita
+      responses:
+        "200":
+          description: Agendamentos
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/IncomeScheduleDto" }
     post:
       tags: [Finance]
-      summary: Cria um agendamento recorrente/parcelado e materializa as ocorrencias
+      summary: Cria um agendamento e materializa as ocorrências
       description: >
-        Registra UMA recorrencia (MONTHLY) ou parcelamento (INSTALLMENTS) e gera
-        automaticamente os lancamentos de receita correspondentes (retroativos
-        para alimentar o ML e futuros para projecao).
+        Registra uma recorrência (MONTHLY), um parcelamento (INSTALLMENTS) ou um
+        lançamento único (ONE_TIME) e gera os lançamentos de receita
+        correspondentes — retroativos (alimentam os modelos de IA) e futuros
+        (alimentam as projeções).
       requestBody:
         required: true
         content:
@@ -208,14 +438,46 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/IncomeScheduleDto" }
+        "400": { $ref: "#/components/responses/ValidationError" }
 
+  /api/v1/incomes/schedules/{id}:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+      - $ref: "#/components/parameters/Affect"
+    put:
+      tags: [Finance]
+      summary: Edita um agendamento (ocorrências futuras ou toda a série)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/IncomeScheduleRequest" }
+      responses:
+        "200":
+          description: Agendamento atualizado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IncomeScheduleDto" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [Finance]
+      summary: Remove um agendamento (ocorrências futuras ou toda a série)
+      responses:
+        "204": { description: Removido }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  # ===================== Expenses =====================
   /api/v1/expenses:
     get:
       tags: [Finance]
-      summary: Lista despesas do usuario
+      summary: Lista as despesas
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
       responses:
         "200":
-          description: Lista de despesas
+          description: Despesas
           content:
             application/json:
               schema:
@@ -223,7 +485,7 @@ paths:
                 items: { $ref: "#/components/schemas/ExpenseDto" }
     post:
       tags: [Finance]
-      summary: Cria uma despesa (pontual; use /schedules para recorrencia)
+      summary: Cria uma despesa avulsa (para recorrência, use /schedules)
       requestBody:
         required: true
         content:
@@ -235,14 +497,119 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ExpenseDto" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+    delete:
+      tags: [Finance]
+      summary: Remove TODAS as despesas do usuário
+      responses:
+        "200":
+          description: Quantidade removida
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DeletedCount" }
 
+  /api/v1/expenses/{id}:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    get:
+      tags: [Finance]
+      summary: Recupera uma despesa
+      responses:
+        "200":
+          description: Despesa
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ExpenseDto" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [Finance]
+      summary: Atualiza uma despesa
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ExpenseRequest" }
+      responses:
+        "200":
+          description: Despesa atualizada
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ExpenseDto" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [Finance]
+      summary: Remove uma despesa
+      responses:
+        "204": { description: Removida }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/expenses/schedules:
+    get:
+      tags: [Finance]
+      summary: Lista os agendamentos de despesa
+      responses:
+        "200":
+          description: Agendamentos
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ExpenseScheduleDto" }
+    post:
+      tags: [Finance]
+      summary: Cria um agendamento de despesa e materializa as ocorrências
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ExpenseScheduleRequest" }
+      responses:
+        "201":
+          description: Agendamento criado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ExpenseScheduleDto" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+
+  /api/v1/expenses/schedules/{id}:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+      - $ref: "#/components/parameters/Affect"
+    put:
+      tags: [Finance]
+      summary: Edita um agendamento de despesa
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ExpenseScheduleRequest" }
+      responses:
+        "200":
+          description: Agendamento atualizado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ExpenseScheduleDto" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [Finance]
+      summary: Remove um agendamento de despesa
+      responses:
+        "204": { description: Removido }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  # ===================== Assets =====================
   /api/v1/assets:
     get:
       tags: [Finance]
-      summary: Lista ativos do usuario
+      summary: Lista os ativos
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
       responses:
         "200":
-          description: Lista de ativos
+          description: Ativos
           content:
             application/json:
               schema:
@@ -262,11 +629,48 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/AssetDto" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+
+  /api/v1/assets/{id}:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    get:
+      tags: [Finance]
+      summary: Recupera um ativo
+      responses:
+        "200":
+          description: Ativo
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetDto" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [Finance]
+      summary: Atualiza um ativo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AssetRequest" }
+      responses:
+        "200":
+          description: Ativo atualizado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetDto" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [Finance]
+      summary: Remove um ativo
+      responses:
+        "204": { description: Removido }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   /api/v1/finance/import:
     post:
       tags: [Finance]
-      summary: Importa em lote receitas e despesas (extratos bancários já classificados no app)
+      summary: Importa em lote receitas e despesas (extratos/faturas já classificados no app)
       requestBody:
         required: true
         content:
@@ -282,7 +686,7 @@ paths:
                   items: { $ref: "#/components/schemas/ExpenseRequest" }
       responses:
         "201":
-          description: Lote importado (linhas inválidas são contadas em skipped)
+          description: Lote importado (linhas inválidas são contadas em `skipped`, sem abortar o lote)
           content:
             application/json:
               schema:
@@ -292,10 +696,11 @@ paths:
                   expensesCreated: { type: integer }
                   skipped: { type: integer }
 
+  # ===================== Simulation =====================
   /api/v1/simulation/run:
     post:
       tags: [Simulation]
-      summary: Executa uma simulacao de Monte Carlo (>= 10.000 cenarios)
+      summary: Executa uma Simulação de Monte Carlo e persiste o resultado
       requestBody:
         required: true
         content:
@@ -303,20 +708,31 @@ paths:
             schema: { $ref: "#/components/schemas/RunSimulationRequest" }
       responses:
         "201":
-          description: Resultado da simulacao
+          description: Resultado da simulação
           content:
             application/json:
               schema: { $ref: "#/components/schemas/SimulationResultResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
         "404": { $ref: "#/components/responses/NotFound" }
 
   /api/v1/simulation/run-calibrated:
     post:
       tags: [Simulation]
-      summary: Executa Monte Carlo com aporte calibrado pelas predicoes de IA
+      summary: Simulação com aporte calibrado pelas predições de IA ("Simular com IA")
       description: >
-        Diferente de /run, o aporte mensal NAO e informado: e derivado das
-        predicoes de renda e despesa do usuario (renda projetada - despesa
-        projetada). A resposta inclui o sumario da calibracao.
+        O aporte mensal NÃO é informado: é derivado da renda e da despesa
+        previstas pelos modelos (renda − despesa, capado em zero), e a
+        volatilidade da renda é incorporada à da carteira. Premissas omitidas
+        (null) vêm da base de referência calibrada ao perfil do usuário.
+
+
+        **Recuo (partida a frio):** se o histórico não basta para os modelos
+        (mínimo de 6 receitas e 12 despesas) ou o microsserviço está
+        indisponível, a renda vem do salário declarado no perfil ou da média
+        mensal recente, a despesa da média mensal recente e, na falta de ambas,
+        do aporte declarado no perfil; a volatilidade de renda vem da base de
+        referência para o vínculo. A origem de cada insumo e os motivos do recuo
+        são devolvidos em `calibration`. Sem nenhum dado, responde 422.
       requestBody:
         required: true
         content:
@@ -324,22 +740,20 @@ paths:
             schema: { $ref: "#/components/schemas/RunCalibratedSimulationRequest" }
       responses:
         "201":
-          description: Resultado + sumario de calibracao
+          description: Resultado + sumário da calibração
           content:
             application/json:
               schema: { $ref: "#/components/schemas/RunCalibratedSimulationResponse" }
-        "422": { $ref: "#/components/responses/MlValidationError" }
-        "503": { description: Microsservico de ML indisponivel }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/InsufficientData" }
 
   /api/v1/simulation/{id}:
+    parameters:
+      - $ref: "#/components/parameters/Id"
     get:
       tags: [Simulation]
-      summary: Recupera o resultado completo de uma simulacao
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema: { type: integer, format: int64 }
+      summary: Resultado completo de uma simulação
       responses:
         "200":
           description: Resultado
@@ -347,11 +761,17 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/SimulationResultResponse" }
         "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [Simulation]
+      summary: Remove uma simulação
+      responses:
+        "204": { description: Removida }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   /api/v1/simulation/by-goal/{goalId}:
     get:
       tags: [Simulation]
-      summary: Lista (resumo) das simulacoes de uma meta
+      summary: Histórico (resumo) das simulações de uma meta
       parameters:
         - name: goalId
           in: path
@@ -359,18 +779,23 @@ paths:
           schema: { type: integer, format: int64 }
       responses:
         "200":
-          description: Resumos
+          description: Resumos, do mais recente ao mais antigo
           content:
             application/json:
               schema:
                 type: array
                 items: { $ref: "#/components/schemas/SimulationSummaryResponse" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
+  # ===================== Optimization =====================
   /api/v1/optimize/contribution:
     post:
       tags: [Optimization]
-      summary: Aporte mensal minimo para atingir a meta com a probabilidade alvo
-      description: Busca binaria combinada com Monte Carlo.
+      summary: Menor aporte mensal que atinge a probabilidade-alvo (padrão 80%)
+      description: >
+        Busca binária sobre a função monótona aporte → P(sucesso), avaliada por
+        Monte Carlo com semente fixa entre as iterações (preserva a
+        monotonicidade), seguida de uma verificação final com 10.000 cenários.
       requestBody:
         required: true
         content:
@@ -378,15 +803,17 @@ paths:
             schema: { $ref: "#/components/schemas/OptimizeContributionRequest" }
       responses:
         "200":
-          description: Resultado da otimizacao
+          description: Resultado da otimização (inclui o passo a passo da busca)
           content:
             application/json:
               schema: { $ref: "#/components/schemas/OptimizationResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   /api/v1/optimize/horizon:
     post:
       tags: [Optimization]
-      summary: Prazo minimo (meses) para a meta mantendo o aporte atual
+      summary: Menor prazo (meses) que atinge a probabilidade-alvo com o aporte informado
       requestBody:
         required: true
         content:
@@ -394,15 +821,17 @@ paths:
             schema: { $ref: "#/components/schemas/OptimizeHorizonRequest" }
       responses:
         "200":
-          description: Resultado da otimizacao
+          description: Resultado da otimização
           content:
             application/json:
               schema: { $ref: "#/components/schemas/OptimizationResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   /api/v1/optimize/rebalance:
     post:
       tags: [Optimization]
-      summary: Alocacao recomendada de carteira dado o perfil de risco
+      summary: Alocação recomendada por classe de ativo (perfil de risco + proximidade da meta)
       requestBody:
         required: true
         content:
@@ -410,86 +839,95 @@ paths:
             schema: { $ref: "#/components/schemas/RebalanceRequest" }
       responses:
         "200":
-          description: Pesos e metricas recomendadas
+          description: Pesos e métricas da carteira recomendada
           content:
             application/json:
               schema: { $ref: "#/components/schemas/RebalanceResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
 
+  # ===================== Predictions =====================
   /api/v1/predictions/income:
     post:
       tags: [Predictions]
-      summary: Predicao de renda (regressao linear) e persistencia
+      summary: Projeção de renda (regressão linear sobre o histórico do usuário)
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
+              required: [horizonMonths]
               properties:
                 horizonMonths: { type: integer, minimum: 1, maximum: 60, example: 12 }
       responses:
         "201":
-          description: Predicao de renda
+          description: Predição de renda
           content:
             application/json:
               schema: { $ref: "#/components/schemas/PredictIncomeResponse" }
-        "422": { $ref: "#/components/responses/MlValidationError" }
+        "422": { $ref: "#/components/responses/InsufficientData" }
+        "502": { $ref: "#/components/responses/MlInternal" }
+        "503": { $ref: "#/components/responses/MlUnavailable" }
 
   /api/v1/predictions/expenses:
     post:
       tags: [Predictions]
-      summary: Predicao de despesas por categoria (Random Forest)
+      summary: Previsão de despesas por categoria (Random Forest com sazonalidade)
       requestBody:
-        required: true
+        required: false
         content:
           application/json:
             schema:
               type: object
               properties:
-                horizonMonths: { type: integer, minimum: 1, maximum: 12, example: 1 }
+                horizonMonths: { type: integer, minimum: 1, maximum: 12, default: 1 }
       responses:
         "201":
-          description: Predicao de despesas
+          description: Predição de despesas
           content:
             application/json:
               schema: { $ref: "#/components/schemas/PredictExpensesResponse" }
-        "422": { $ref: "#/components/responses/MlValidationError" }
+        "422": { $ref: "#/components/responses/InsufficientData" }
+        "502": { $ref: "#/components/responses/MlInternal" }
+        "503": { $ref: "#/components/responses/MlUnavailable" }
 
   /api/v1/predictions/wealth:
     post:
       tags: [Predictions]
-      summary: Predicao de patrimonio (serie temporal ARIMA)
+      summary: Projeção de patrimônio (série temporal ARIMA)
       description: >
-        Reconstroi a serie mensal de patrimonio a partir do historico de
-        receitas/despesas/ativos e projeta a tendencia futura com um modelo
-        de serie temporal (ARIMA com fallback de tendencia linear).
+        Reconstrói a série mensal de patrimônio acumulado a partir do fluxo de
+        caixa (receitas − despesas) e projeta a tendência com ARIMA (recuo para
+        tendência linear). A resposta traz a série realizada e a projetada.
       requestBody:
-        required: true
+        required: false
         content:
           application/json:
             schema:
               type: object
               properties:
-                horizonMonths: { type: integer, minimum: 1, maximum: 60, example: 12 }
+                horizonMonths: { type: integer, minimum: 1, maximum: 60, default: 12 }
       responses:
         "201":
-          description: Predicao de patrimonio
+          description: Predição de patrimônio
           content:
             application/json:
               schema: { $ref: "#/components/schemas/PredictWealthResponse" }
-        "422": { $ref: "#/components/responses/MlValidationError" }
+        "422": { $ref: "#/components/responses/InsufficientData" }
+        "502": { $ref: "#/components/responses/MlInternal" }
+        "503": { $ref: "#/components/responses/MlUnavailable" }
 
   /api/v1/predictions:
     get:
       tags: [Predictions]
-      summary: Lista as predicoes recentes do usuario (auditoria)
+      summary: Predições recentes do usuário (auditoria)
       parameters:
         - name: limit
           in: query
           schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
       responses:
         "200":
-          description: Predicoes recentes
+          description: Predições
           content:
             application/json:
               schema:
@@ -503,19 +941,57 @@ components:
       scheme: bearer
       bearerFormat: JWT
 
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema: { type: integer, format: int64 }
+    Limit:
+      name: limit
+      in: query
+      required: false
+      description: Paginação opcional — tamanho da página (1–500)
+      schema: { type: integer, minimum: 1, maximum: 500 }
+    Offset:
+      name: offset
+      in: query
+      required: false
+      schema: { type: integer, minimum: 0, default: 0 }
+    Affect:
+      name: affect
+      in: query
+      required: false
+      description: Escopo da edição/remoção do agendamento
+      schema: { type: string, enum: [FUTURE_ONLY, ALL], default: FUTURE_ONLY }
+
   responses:
     ValidationError:
-      description: Erro de validacao
+      description: Dados inválidos (`VALIDATION` / `INVALID_ID`)
       content:
         application/json:
           schema: { $ref: "#/components/schemas/ErrorResponse" }
+    Unauthorized:
+      description: Token ausente, inválido ou expirado
     NotFound:
-      description: Recurso nao encontrado
+      description: Recurso não encontrado ou de outro usuário (`NOT_FOUND`)
       content:
         application/json:
           schema: { $ref: "#/components/schemas/ErrorResponse" }
-    MlValidationError:
-      description: Dados insuficientes/invalidos para o modelo de ML
+    TooManyRequests:
+      description: Limite de tentativas excedido (rate limit de autenticação)
+    InsufficientData:
+      description: Histórico insuficiente para o modelo (`INSUFFICIENT_DATA`)
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+    MlUnavailable:
+      description: Microsserviço de ML indisponível após as tentativas (`ML_UNAVAILABLE`)
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+    MlInternal:
+      description: Erro interno ou resposta malformada do microsserviço (`ML_INTERNAL`)
       content:
         application/json:
           schema: { $ref: "#/components/schemas/ErrorResponse" }
@@ -523,33 +999,52 @@ components:
   schemas:
     ErrorResponse:
       type: object
+      required: [error, message]
       properties:
-        code: { type: string, example: VALIDATION }
-        message: { type: string, example: Dados invalidos }
+        error:
+          type: string
+          description: Código curto e estável do erro
+          enum:
+            - VALIDATION
+            - INVALID_ID
+            - NOT_FOUND
+            - EMAIL_TAKEN
+            - INVALID_CREDENTIALS
+            - INSUFFICIENT_DATA
+            - ML_UNAVAILABLE
+            - ML_INTERNAL
+            - INTERNAL_ERROR
+        message: { type: string, description: Descrição legível }
+
+    DeletedCount:
+      type: object
+      properties:
+        deleted: { type: integer }
+
+    RiskProfile:
+      type: string
+      enum: [CONSERVATIVE, MODERATE, AGGRESSIVE]
 
     RegisterRequest:
       type: object
       required: [email, name, password]
       properties:
-        email: { type: string, example: user@example.com }
+        email: { type: string, format: email, example: usuario@exemplo.com }
         name: { type: string, example: Gabriel }
         password: { type: string, minLength: 8, example: senha1234 }
-        riskProfile:
-          type: string
-          enum: [CONSERVATIVE, MODERATE, AGGRESSIVE]
-          default: MODERATE
+        riskProfile: { $ref: "#/components/schemas/RiskProfile" }
 
     LoginRequest:
       type: object
       required: [email, password]
       properties:
-        email: { type: string, example: user@example.com }
-        password: { type: string, example: senha1234 }
+        email: { type: string, format: email }
+        password: { type: string }
 
     AuthResponse:
       type: object
       properties:
-        token: { type: string, description: JWT }
+        token: { type: string, description: JWT (HS256) }
         user: { $ref: "#/components/schemas/UserDto" }
 
     UserDto:
@@ -558,19 +1053,100 @@ components:
         id: { type: integer, format: int64 }
         email: { type: string }
         name: { type: string }
-        riskProfile: { type: string, enum: [CONSERVATIVE, MODERATE, AGGRESSIVE] }
+        riskProfile: { $ref: "#/components/schemas/RiskProfile" }
         createdAt: { type: string, format: date-time }
+
+    UserProfile:
+      type: object
+      description: >
+        Documento livre (JSONB). Campos usados pelo app e pelo backend — todos
+        opcionais; valores monetários e percentuais como texto digitado.
+      additionalProperties: true
+      properties:
+        age: { type: integer }
+        monthlySalary: { type: string, example: "8.500,00" }
+        employmentType: { type: string, enum: [CLT, PJ, ENTREPRENEUR, SELF_EMPLOYED, CIVIL_SERVANT] }
+        retirementAge: { type: integer }
+        monthlyContribution: { type: string, example: "1.500,00" }
+        maritalStatus: { type: string }
+        dependents: { type: integer }
+        childrenAges: { type: string, example: "3, 7" }
+        state: { type: string, example: SP }
+        lifeExpectancy: { type: integer }
+        expectedSalaryGrowth: { type: string, example: "5" }
+        unemploymentRisk: { type: string, enum: [LOW, MEDIUM, HIGH] }
+        housingStatus: { type: string, enum: [OWNED, FINANCED, RENTED] }
+        housingMonthlyCost: { type: string }
+        propertyValue: { type: string }
+        vehiclesValue: { type: string }
+        taxRegime: { type: string }
+        emergencyReserve: { type: string }
+        totalDebt: { type: string }
+        plansChildren: { type: boolean }
+        plansProperty: { type: boolean }
+
+    ReferenceDataResponse:
+      type: object
+      properties:
+        inflationAnnualMean: { type: number, format: double, example: 0.045 }
+        inflationAnnualStdDev: { type: number, format: double }
+        salaryGrowthAnnualMean: { type: number, format: double }
+        salaryGrowthAnnualStdDev: { type: number, format: double }
+        selicAnnual: { type: number, format: double }
+        riskFreeAnnual: { type: number, format: double }
+        cdiVolatilityAnnual: { type: number, format: double }
+        unemploymentDurationMonths: { type: integer }
+        defaultUnemploymentProbAnnual: { type: number, format: double }
+        unexpectedExpenseAnnualFrequency: { type: number, format: double }
+        unexpectedExpenseMeanFractionOfIncome: { type: number, format: double }
+        lifeExpectancyYears: { type: integer }
+        vehicleDepreciationAnnual: { type: number, format: double }
+        realEstateAppreciationAnnual: { type: number, format: double }
+        safeWithdrawalRate: { type: number, format: double }
+        byRiskProfile:
+          type: object
+          additionalProperties:
+            type: object
+            properties:
+              expectedReturnAnnual: { type: number, format: double }
+              volatilityAnnual: { type: number, format: double }
+        byEmploymentType:
+          type: object
+          additionalProperties:
+            type: object
+            properties:
+              unemploymentProbAnnual: { type: number, format: double }
+              incomeVolatilityAnnual: { type: number, format: double }
+        childCostByAge:
+          type: array
+          items:
+            type: object
+            properties:
+              ageMaxInclusive: { type: integer }
+              monthlyCost: { type: number, format: double }
+
+    DashboardResponse:
+      type: object
+      properties:
+        totalAssets: { type: string, example: "120000.00" }
+        monthlyIncome: { type: string }
+        monthlyExpenses: { type: string }
+        savingsRate: { type: string, description: Pontos percentuais, example: "32.5000" }
+        goalsCount: { type: integer }
+        totalGoalTarget: { type: string }
+
+    GoalCategory:
+      type: string
+      enum: [RETIREMENT, REAL_ESTATE, FINANCIAL_INDEPENDENCE, EDUCATION, TRAVEL, CUSTOM]
 
     GoalRequest:
       type: object
       required: [name, category, targetAmount, targetDate]
       properties:
         name: { type: string, example: Aposentadoria }
-        category:
-          type: string
-          enum: [RETIREMENT, REAL_ESTATE, FINANCIAL_INDEPENDENCE, EDUCATION, TRAVEL, CUSTOM]
+        category: { $ref: "#/components/schemas/GoalCategory" }
         targetAmount: { type: string, example: "1000000.00" }
-        targetDate: { type: string, format: date-time }
+        targetDate: { type: string, format: date-time, example: "2046-12-31T00:00:00Z" }
         priority: { type: integer, default: 1 }
 
     GoalDto:
@@ -579,7 +1155,7 @@ components:
         id: { type: integer, format: int64 }
         userId: { type: integer, format: int64 }
         name: { type: string }
-        category: { type: string }
+        category: { $ref: "#/components/schemas/GoalCategory" }
         targetAmount: { type: string }
         targetDate: { type: string, format: date-time }
         priority: { type: integer }
@@ -587,80 +1163,127 @@ components:
 
     IncomeRequest:
       type: object
-      required: [amount, incomeType, receivedAt]
+      required: [source, amount, incomeType, receivedAt]
       properties:
+        source: { type: string, example: Salário }
         amount: { type: string, example: "5000.00" }
-        incomeType: { type: string, example: SALARY }
-        receivedAt: { type: string, format: date-time }
+        incomeType: { type: string, enum: [SALARY, BONUS, DIVIDEND, RENT, OTHER] }
         recurring: { type: boolean, default: false }
+        receivedAt: { type: string, format: date-time }
 
     IncomeDto:
       type: object
       properties:
         id: { type: integer, format: int64 }
+        userId: { type: integer, format: int64 }
+        source: { type: string }
         amount: { type: string }
         incomeType: { type: string }
-        receivedAt: { type: string, format: date-time }
         recurring: { type: boolean }
-        scheduleId: { type: integer, format: int64, nullable: true }
-
-    IncomeScheduleRequest:
-      type: object
-      required: [amount, incomeType, startDate, recurrenceType]
-      properties:
-        amount: { type: string, example: "5000.00" }
-        incomeType: { type: string, example: SALARY }
-        startDate: { type: string, format: date-time }
-        recurrenceType: { type: string, enum: [MONTHLY, INSTALLMENTS] }
-        endDate: { type: string, format: date-time, nullable: true }
-        installments: { type: integer, nullable: true }
-
-    IncomeScheduleDto:
-      type: object
-      properties:
-        id: { type: integer, format: int64 }
-        amount: { type: string }
-        incomeType: { type: string }
-        startDate: { type: string, format: date-time }
-        recurrenceType: { type: string }
-        generatedCount: { type: integer }
+        receivedAt: { type: string, format: date-time }
+        createdAt: { type: string, format: date-time }
 
     ExpenseRequest:
       type: object
-      required: [amount, category, spentAt]
+      required: [description, amount, category, spentAt]
       properties:
+        description: { type: string, example: Aluguel }
         amount: { type: string, example: "1500.00" }
-        category: { type: string, example: HOUSING }
-        spentAt: { type: string, format: date-time }
+        category: { type: string, enum: [HOUSING, FOOD, TRANSPORT, HEALTH, EDUCATION, LEISURE, OTHER] }
         recurring: { type: boolean, default: false }
+        spentAt: { type: string, format: date-time }
 
     ExpenseDto:
       type: object
       properties:
         id: { type: integer, format: int64 }
+        userId: { type: integer, format: int64 }
+        description: { type: string }
         amount: { type: string }
         category: { type: string }
-        spentAt: { type: string, format: date-time }
         recurring: { type: boolean }
-        scheduleId: { type: integer, format: int64, nullable: true }
+        spentAt: { type: string, format: date-time }
+        createdAt: { type: string, format: date-time }
+
+    Recurrence:
+      type: string
+      enum: [ONE_TIME, MONTHLY, INSTALLMENTS]
+
+    IncomeScheduleRequest:
+      type: object
+      required: [source, amountPerOccurrence, incomeType, recurrence, startDate]
+      properties:
+        source: { type: string, example: Salário }
+        amountPerOccurrence: { type: string, example: "5000.00" }
+        incomeType: { type: string, enum: [SALARY, BONUS, DIVIDEND, RENT, OTHER] }
+        recurrence: { $ref: "#/components/schemas/Recurrence" }
+        startDate: { type: string, format: date-time }
+        endDate: { type: string, format: date-time, nullable: true, description: "null = sem fim (MONTHLY)" }
+        installmentsTotal: { type: integer, nullable: true, description: Obrigatório em INSTALLMENTS }
+
+    IncomeScheduleDto:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        userId: { type: integer, format: int64 }
+        source: { type: string }
+        amountPerOccurrence: { type: string }
+        incomeType: { type: string }
+        recurrence: { $ref: "#/components/schemas/Recurrence" }
+        startDate: { type: string, format: date-time }
+        endDate: { type: string, format: date-time, nullable: true }
+        installmentsTotal: { type: integer, nullable: true }
+        createdAt: { type: string, format: date-time }
+        generatedCount: { type: integer, description: Lançamentos materializados por este agendamento }
+
+    ExpenseScheduleRequest:
+      type: object
+      required: [description, amountPerOccurrence, category, recurrence, startDate]
+      properties:
+        description: { type: string, example: Financiamento do carro }
+        amountPerOccurrence: { type: string, example: "1200.00" }
+        category: { type: string, enum: [HOUSING, FOOD, TRANSPORT, HEALTH, EDUCATION, LEISURE, OTHER] }
+        recurrence: { $ref: "#/components/schemas/Recurrence" }
+        startDate: { type: string, format: date-time }
+        endDate: { type: string, format: date-time, nullable: true }
+        installmentsTotal: { type: integer, nullable: true }
+
+    ExpenseScheduleDto:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        userId: { type: integer, format: int64 }
+        description: { type: string }
+        amountPerOccurrence: { type: string }
+        category: { type: string }
+        recurrence: { $ref: "#/components/schemas/Recurrence" }
+        startDate: { type: string, format: date-time }
+        endDate: { type: string, format: date-time, nullable: true }
+        installmentsTotal: { type: integer, nullable: true }
+        createdAt: { type: string, format: date-time }
+        generatedCount: { type: integer }
 
     AssetRequest:
       type: object
-      required: [assetType, value]
+      required: [name, assetType, currentValue, expectedReturn, volatility]
       properties:
-        assetType: { type: string, example: STOCKS }
-        value: { type: string, example: "20000.00" }
-        expectedReturnAnnual: { type: number, format: double, example: 0.08 }
-        volatilityAnnual: { type: number, format: double, example: 0.15 }
+        name: { type: string, example: Tesouro Selic }
+        assetType: { type: string, enum: [FIXED_INCOME, STOCKS, REAL_ESTATE_FUND, CRYPTO, REAL_ESTATE, OTHER] }
+        currentValue: { type: string, example: "20000.00" }
+        expectedReturn: { type: string, description: Retorno anual esperado (fração), example: "0.10" }
+        volatility: { type: string, description: Volatilidade anual (fração), example: "0.005" }
 
     AssetDto:
       type: object
       properties:
         id: { type: integer, format: int64 }
+        userId: { type: integer, format: int64 }
+        name: { type: string }
         assetType: { type: string }
-        value: { type: string }
-        expectedReturnAnnual: { type: number, format: double }
-        volatilityAnnual: { type: number, format: double }
+        currentValue: { type: string }
+        expectedReturn: { type: string }
+        volatility: { type: string }
+        createdAt: { type: string, format: date-time }
 
     RunSimulationRequest:
       type: object
@@ -673,30 +1296,35 @@ components:
         volatilityAnnual: { type: number, format: double, example: 0.15 }
         horizonMonths: { type: integer, example: 240 }
         targetAmount: { type: number, format: double, example: 1000000 }
-        unemploymentProbAnnual: { type: number, format: double, default: 0.0 }
+        unemploymentProbAnnual: { type: number, format: double, default: 0.0, description: "Bernoulli mensal p/12" }
         unemploymentDurationMonths: { type: integer, default: 6 }
-        inflationAnnual: { type: number, format: double, default: 0.0 }
-        numSimulations: { type: integer, default: 10000, minimum: 10000 }
-        seed: { type: integer, format: int64, nullable: true }
+        inflationAnnual: { type: number, format: double, default: 0.0, description: Deflator do resultado real }
+        numSimulations: { type: integer, default: 10000 }
+        seed: { type: integer, format: int64, nullable: true, description: Fixe para reprodutibilidade }
+        unexpectedExpenseAnnualFrequency: { type: number, format: double, default: 0.0, description: "λ anual do Poisson (0 desliga)" }
+        unexpectedExpenseMeanAmount: { type: number, format: double, default: 0.0, description: Média da Exponencial em R$ }
+        incomeVolatilityAnnual: { type: number, format: double, default: 0.0, description: Variação de renda (Normal truncada em zero) }
 
     RunCalibratedSimulationRequest:
       type: object
-      required: [goalId, initialCapital, expectedReturnAnnual, volatilityAnnual, horizonMonths, targetAmount]
+      required: [goalId, initialCapital, horizonMonths, targetAmount]
       properties:
         goalId: { type: string, example: "1" }
         initialCapital: { type: number, format: double, example: 50000 }
-        expectedReturnAnnual: { type: number, format: double, example: 0.08 }
-        volatilityAnnual: { type: number, format: double, example: 0.15 }
+        expectedReturnAnnual: { type: number, format: double, nullable: true, description: "null = preset do perfil de risco" }
+        volatilityAnnual: { type: number, format: double, nullable: true }
         horizonMonths: { type: integer, example: 240 }
         targetAmount: { type: number, format: double, example: 1000000 }
-        unemploymentProbAnnual: { type: number, format: double, default: 0.0 }
-        inflationAnnual: { type: number, format: double, default: 0.0 }
+        unemploymentProbAnnual: { type: number, format: double, nullable: true, description: "null = preset do vínculo" }
+        unemploymentDurationMonths: { type: integer, nullable: true }
+        inflationAnnual: { type: number, format: double, nullable: true }
         numSimulations: { type: integer, default: 10000 }
-        incomeHorizonMonths: { type: integer, default: 12 }
+        seed: { type: integer, format: int64, nullable: true }
+        incomeHorizonMonths: { type: integer, default: 12, minimum: 1, maximum: 60 }
 
     TrajectoryBandDto:
       type: object
-      description: Banda de percentis do patrimonio em um mes (fan chart)
+      description: Banda de percentis do patrimônio em um mês (fan chart)
       properties:
         monthIndex: { type: integer }
         p10: { type: number, format: double }
@@ -720,17 +1348,17 @@ components:
         numSimulations: { type: integer }
         seed: { type: integer, format: int64 }
         targetAmount: { type: number, format: double }
-        successProbability: { type: number, format: double, description: "Fracao em [0,1]" }
+        successProbability: { type: number, format: double, description: "Fração em [0, 1]" }
         mean: { type: number, format: double }
         median: { type: number, format: double }
         standardDeviation: { type: number, format: double }
         percentiles:
           type: object
+          description: Chaves P5, P10, P25, P50, P75, P90, P95
           additionalProperties: { type: number, format: double }
-          example: { P5: 120000, P50: 480000, P95: 1300000 }
-        worstCase: { type: number, format: double }
-        bestCase: { type: number, format: double }
-        meanReal: { type: number, format: double }
+        worstCase: { type: number, format: double, description: P5 }
+        bestCase: { type: number, format: double, description: P95 }
+        meanReal: { type: number, format: double, description: Média deflacionada pela inflação }
         histogram:
           type: array
           items: { $ref: "#/components/schemas/HistogramBucketDto" }
@@ -754,13 +1382,20 @@ components:
     CalibrationSummaryResponse:
       type: object
       properties:
-        incomePredictionId: { type: integer, format: int64 }
-        expensePredictionId: { type: integer, format: int64 }
+        incomePredictionId: { type: integer, format: int64, nullable: true }
+        expensePredictionId: { type: integer, format: int64, nullable: true }
         predictedMonthlyIncome: { type: number, format: double }
         predictedMonthlyExpense: { type: number, format: double }
-        rawMonthlyContribution: { type: number, format: double }
-        appliedMonthlyContribution: { type: number, format: double }
+        rawMonthlyContribution: { type: number, format: double, description: "Renda − despesa (pode ser negativo)" }
+        appliedMonthlyContribution: { type: number, format: double, description: Capado em zero }
         appliedVolatilityAnnual: { type: number, format: double }
+        incomeSource: { type: string, nullable: true, enum: [ML_MODEL, PROFILE, HISTORY_AVERAGE] }
+        expenseSource: { type: string, nullable: true, enum: [ML_MODEL, PROFILE, HISTORY_AVERAGE] }
+        contributionSource: { type: string, enum: [PREDICTIONS, PROFILE] }
+        fallbackNotes:
+          type: array
+          description: Motivos do recuo (vazio quando os dois modelos rodaram)
+          items: { type: string }
 
     RunCalibratedSimulationResponse:
       type: object
@@ -770,39 +1405,84 @@ components:
 
     OptimizeContributionRequest:
       type: object
-      required: [initialCapital, expectedReturnAnnual, volatilityAnnual, horizonMonths, targetAmount, targetSuccessProbability]
+      required: [initialCapital, expectedReturnAnnual, volatilityAnnual, targetAmount, horizonMonths]
       properties:
         goalId: { type: string, nullable: true }
         initialCapital: { type: number, format: double }
         expectedReturnAnnual: { type: number, format: double }
         volatilityAnnual: { type: number, format: double }
-        horizonMonths: { type: integer }
         targetAmount: { type: number, format: double }
-        targetSuccessProbability: { type: number, format: double, example: 0.8 }
-        maxContribution: { type: number, format: double, nullable: true }
+        horizonMonths: { type: integer }
+        targetSuccessProbability: { type: number, format: double, default: 0.8 }
+        unemploymentProbAnnual: { type: number, format: double, default: 0.0 }
+        unemploymentDurationMonths: { type: integer, default: 6 }
+        inflationAnnual: { type: number, format: double, default: 0.0 }
+        maxContribution: { type: number, format: double, nullable: true, description: "Teto manual; sem ele, limite analítico com duplicação automática" }
+        simulationsPerStep: { type: integer, default: 2000 }
+        verificationSimulations: { type: integer, default: 10000 }
+        seed: { type: integer, format: int64, nullable: true }
 
     OptimizeHorizonRequest:
       type: object
-      required: [initialCapital, expectedReturnAnnual, volatilityAnnual, monthlyContribution, targetAmount, targetSuccessProbability, maxHorizonMonths]
+      required: [initialCapital, expectedReturnAnnual, volatilityAnnual, targetAmount, monthlyContribution]
       properties:
         goalId: { type: string, nullable: true }
         initialCapital: { type: number, format: double }
         expectedReturnAnnual: { type: number, format: double }
         volatilityAnnual: { type: number, format: double }
-        monthlyContribution: { type: number, format: double }
         targetAmount: { type: number, format: double }
-        targetSuccessProbability: { type: number, format: double, example: 0.8 }
-        maxHorizonMonths: { type: integer, example: 600 }
+        monthlyContribution: { type: number, format: double }
+        targetSuccessProbability: { type: number, format: double, default: 0.8 }
+        unemploymentProbAnnual: { type: number, format: double, default: 0.0 }
+        unemploymentDurationMonths: { type: integer, default: 6 }
+        inflationAnnual: { type: number, format: double, default: 0.0 }
+        maxHorizonMonths: { type: integer, default: 600 }
+        simulationsPerStep: { type: integer, default: 2000 }
+        verificationSimulations: { type: integer, default: 10000 }
+        seed: { type: integer, format: int64, nullable: true }
+
+    IterationStepDto:
+      type: object
+      properties:
+        index: { type: integer }
+        candidate: { type: number, format: double }
+        measuredProbability: { type: number, format: double }
+        lowerBound: { type: number, format: double }
+        upperBound: { type: number, format: double }
+
+    VerificationResultDto:
+      type: object
+      properties:
+        numSimulations: { type: integer }
+        successProbability: { type: number, format: double }
+        mean: { type: number, format: double }
+        median: { type: number, format: double }
+        standardDeviation: { type: number, format: double }
+        percentiles:
+          type: object
+          additionalProperties: { type: number, format: double }
+        worstCase: { type: number, format: double }
+        bestCase: { type: number, format: double }
+        meanReal: { type: number, format: double }
+        histogram:
+          type: array
+          items: { $ref: "#/components/schemas/HistogramBucketDto" }
 
     OptimizationResponse:
       type: object
       properties:
-        type: { type: string, example: CONTRIBUTION }
+        type: { type: string, enum: [CONTRIBUTION, HORIZON] }
         feasible: { type: boolean }
-        optimalValue: { type: number, format: double }
+        optimalValue: { type: number, format: double, description: "Aporte (R$) ou prazo (meses)" }
         achievedProbability: { type: number, format: double }
         targetProbability: { type: number, format: double }
         terminationReason: { type: string }
+        iterations:
+          type: array
+          items: { $ref: "#/components/schemas/IterationStepDto" }
+        verification:
+          allOf: [{ $ref: "#/components/schemas/VerificationResultDto" }]
+          nullable: true
         executionTimeMs: { type: integer, format: int64 }
         seed: { type: integer, format: int64 }
 
@@ -810,7 +1490,7 @@ components:
       type: object
       required: [riskProfile, currentCapital, targetAmount, monthsToGoal]
       properties:
-        riskProfile: { type: string, enum: [CONSERVATIVE, MODERATE, AGGRESSIVE] }
+        riskProfile: { $ref: "#/components/schemas/RiskProfile" }
         currentCapital: { type: number, format: double }
         targetAmount: { type: number, format: double }
         monthsToGoal: { type: integer }
@@ -820,18 +1500,12 @@ components:
       properties:
         weights:
           type: object
+          description: Peso (fração) por classe de ativo
           additionalProperties: { type: number, format: double }
         expectedReturnAnnual: { type: number, format: double }
         volatilityAnnual: { type: number, format: double }
         riskScore: { type: number, format: double }
         rationale: { type: string }
-
-    ModelMetrics:
-      type: object
-      properties:
-        mae: { type: number, format: double }
-        rmse: { type: number, format: double }
-        r2: { type: number, format: double }
 
     PredictIncomeResponse:
       type: object
@@ -881,7 +1555,7 @@ components:
         horizonMonths: { type: integer }
         history:
           type: array
-          description: Serie mensal de patrimonio reconstruida (real)
+          description: Série mensal de patrimônio reconstruída (realizado)
           items:
             type: object
             properties:
@@ -889,7 +1563,7 @@ components:
               amount: { type: number, format: double }
         projection:
           type: array
-          description: Patrimonio projetado mes a mes
+          description: Patrimônio projetado mês a mês
           items:
             type: object
             properties:
@@ -907,7 +1581,7 @@ components:
       properties:
         id: { type: integer, format: int64 }
         modelName: { type: string }
-        errorMetric: { type: number, format: double, nullable: true }
+        errorMetric: { type: number, format: double, nullable: true, description: MAE }
         createdAt: { type: string, format: date-time }
 
 security:
