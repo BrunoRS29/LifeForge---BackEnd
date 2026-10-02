@@ -74,6 +74,8 @@ Base: `/api/v1`. Salvo indicação, exigem **JWT** (`Authorization: Bearer <toke
 | POST | `/api/v1/auth/register` | — | cria conta + retorna JWT |
 | POST | `/api/v1/auth/login` | — | login + retorna JWT |
 | GET | `/api/v1/users/me` | JWT | usuário atual |
+| PATCH | `/api/v1/users/me/risk-profile` · `/me/name` | JWT | troca perfil de risco / nome de exibição |
+| GET | `/api/v1/dashboard` | JWT | indicadores consolidados (patrimônio, renda, despesa, metas) |
 | GET·PUT | `/api/v1/profile` | JWT | perfil estendido (parâmetros opcionais p/ projeções) |
 | GET·POST | `/api/v1/goals` | JWT | lista / cria metas |
 | GET·PUT·DELETE | `/api/v1/goals/{id}` | JWT | detalhe / atualiza / remove |
@@ -89,12 +91,24 @@ Base: `/api/v1`. Salvo indicação, exigem **JWT** (`Authorization: Bearer <toke
 | POST | `/api/v1/simulation/run` | JWT | Monte Carlo (≥ 10.000 simulações) |
 | POST | `/api/v1/simulation/run-calibrated` | JWT | Monte Carlo calibrado por IA + perfil |
 | GET | `/api/v1/simulation/{id}` | JWT | resultado completo |
-| GET | `/api/v1/simulation/by-goal/{goalId}` | JWT | simulações de uma meta |
+| GET | `/api/v1/simulation/by-goal/{goalId}` | JWT | histórico de uma meta (resumo + premissas) |
 | DELETE | `/api/v1/simulation/{id}` | JWT | remove |
 | POST | `/api/v1/optimize/contribution` | JWT | aporte ideal (busca binária + Monte Carlo) |
 | POST | `/api/v1/optimize/horizon` | JWT | prazo mínimo para o aporte atual |
 | POST | `/api/v1/optimize/rebalance` | JWT | alocação sugerida por perfil de risco |
 | POST | `/api/v1/predictions/{income,expenses,wealth}` | JWT | predições de IA (regressão / RF / ARIMA) |
+| GET | `/api/v1/predictions` | JWT | predições recentes (auditoria) |
+| GET | `/metrics` | — | métricas Prometheus (Micrometer) |
+
+**Contrato:** valores monetários de cadastro como texto decimal, datas ISO-8601,
+enums pelo nome; listas com paginação opcional `?limit=&offset=`; erros sempre
+`ErrorResponse { error, message }` (`VALIDATION`, `INVALID_ID`, `NOT_FOUND`,
+`EMAIL_TAKEN`, `INVALID_CREDENTIALS`, `INSUFFICIENT_DATA`, `ML_UNAVAILABLE`,
+`ML_INTERNAL`, `INTERNAL_ERROR`) — corpo malformado responde 400, não 500. As
+criações de metas, receitas, despesas e ativos aceitam o cabeçalho
+`Idempotency-Key`: o app offline-first reenvia criações sem risco de duplicar. As
+respostas de simulação trazem `inputs` (as premissas da rodada), base da comparação
+de estratégias no app. Especificação completa em `/openapi.yaml`.
 
 ## Motor de Simulação de Monte Carlo
 
@@ -104,6 +118,7 @@ Base: `/api/v1`. Salvo indicação, exigem **JWT** (`Authorization: Bearer <toke
 - **retorno** da carteira ~ Normal(média, desvio);
 - **evento de desemprego** ~ Bernoulli(prob. mensal), com duração configurável;
 - **despesa inesperada** ~ nº de eventos/mês Poisson(λ/12) × magnitude Exponencial(média);
+- **variação de renda** ~ Normal truncada em zero sobre o aporte;
 - deflação por **inflação** para resultado em valor real.
 
 Saídas: probabilidade de sucesso, média/mediana, percentis (P5…P95), pior/melhor
@@ -127,19 +142,33 @@ renda (regressão), gastos (Random Forest) e patrimônio (ARIMA), e **calibra** 
 parâmetros do Monte Carlo a partir das predições (rota `run-calibrated`). Métricas de
 erro (MAE/RMSE/R²) são propagadas para transparência.
 
+**Partida a frio:** com histórico insuficiente para os modelos (6 receitas / 12
+despesas) ou com o microsserviço fora do ar, a simulação calibrada recua para o
+salário e o aporte declarados no perfil e para médias simples dos últimos 12 meses,
+e toma da base de referência a volatilidade de renda do vínculo
+(`ml/ColdStartCalibration`). A resposta informa a origem de cada insumo e os motivos
+do recuo.
+
 ## Testes e cobertura
 
 ```bash
 ./gradlew test                 # Kotest (motor, otimização, estatística, rotas, ML)
 ./gradlew jacocoTestReport     # relatório de cobertura
+./gradlew benchmark            # tempos de processamento do motor (30 execuções)
+cd ml-service && pytest        # microsserviço de IA
+python scripts/smoke_test.py   # ponta a ponta contra o Docker em execução
+python scripts/smoke_test.py --bench 30   # + latência HTTP de /simulation/run
 ```
+
+O CI (GitHub Actions) roda os testes do backend e do microsserviço a cada push.
 
 Cobre o motor de Monte Carlo (determinismo, reprodutibilidade, conformidade
 distribucional, desempenho com 10k), otimização (convergência da busca binária,
 casos infactíveis, monotonicidade), rebalanceamento, geradores aleatórios, funções
 estatísticas, hash de senha e rotas (test client do Ktor). Relatórios analíticos:
 
-- `docs/cobertura-testes.md` — cobertura (JaCoCo, > 70% no motor)
+- `docs/cobertura-testes.md` — cobertura (JaCoCo, 95,9% das linhas do motor)
+- `docs/tempos-processamento.md` — tempos do motor medidos (`gradlew benchmark`)
 - `docs/analise-sensibilidade.md` — análise de sensibilidade dos parâmetros
 - `docs/comparacao-montecarlo-deterministico.md` — Monte Carlo × determinístico
 - `docs/estatisticas-referencia.md` — base de referência e mapeamento da §6.2
