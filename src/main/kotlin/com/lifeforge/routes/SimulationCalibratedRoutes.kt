@@ -43,12 +43,16 @@ import kotlinx.serialization.json.put
  *
  * Fluxo:
  *   1. Valida e busca a meta do usuario
- *   2. Chama [MlPredictionService.predictIncomeFor]
- *   3. Chama [MlPredictionService.predictExpensesFor]
- *   4. Aplica [MlPredictionService.calibrate] para derivar parametros
+ *   2. Resolve renda e despesa ([MlPredictionService.resolveCalibrationInputs]):
+ *      modelos de IA quando ha historico; senao recuo para o perfil e para
+ *      medias simples do historico (partida a frio, TCC 5.2)
+ *   3. Monta os parametros base (preset da base de referencia pelo perfil)
+ *   4. Aplica [MlPredictionService.calibrateWithFallback] para derivar o aporte
+ *      e a volatilidade; sem nenhuma estimativa possivel -> 422 INSUFFICIENT_DATA
  *   5. Executa a engine Monte Carlo (Dispatchers.Default - CPU bound)
  *   6. Persiste a simulacao na tabela `simulations`
- *   7. Responde com simulacao + sumario da calibracao
+ *   7. Responde com simulacao + sumario da calibracao (com a origem de cada
+ *      insumo e os motivos do recuo, por transparencia)
  *
  * Vive em arquivo separado de [simulationRoutes] (Sprint 2) para isolar a
  * dependencia do MlPredictionService - o endpoint legado nao precisa dele.
@@ -77,27 +81,24 @@ fun Route.simulationCalibratedRoutes(
                 val goalId = request.goalId.toLongOrNull()
                     ?: return@post call.respond(
                         HttpStatusCode.BadRequest,
-                        ErrorResponse("VALIDATION", "goalId invalido"),
+                        ErrorResponse("VALIDATION", "goalId inválido"),
                     )
                 val goal = goalRepository.findById(goalId, userId)
                     ?: return@post call.respond(
                         HttpStatusCode.NotFound,
-                        ErrorResponse("NOT_FOUND", "Meta nao encontrada"),
+                        ErrorResponse("NOT_FOUND", "Meta não encontrada"),
                     )
 
-                // 1+2. Predicoes (qualquer erro do ML vai para o helper)
-                val incomeOutcome = runCatching {
-                    predictionService.predictIncomeFor(userId, request.incomeHorizonMonths)
-                }.getOrElse {
-                    call.respondMlError(it)
-                    return@post
-                }
-                val expenseOutcome = runCatching {
-                    predictionService.predictExpensesFor(userId, horizonMonths = 1)
-                }.getOrElse {
-                    call.respondMlError(it)
-                    return@post
-                }
+                // 1+2. Predicoes de renda e despesa, com recuo (TCC 4.7/5.2): o
+                // que os modelos nao puderem prever (historico insuficiente ou
+                // microsservico indisponivel) vem do perfil e de medias simples
+                // do historico - a simulacao calibrada nao falha na partida a frio.
+                val profileJson = userProfileRepository.get(userId)
+                val inputs = predictionService.resolveCalibrationInputs(
+                    userId = userId,
+                    incomeHorizonMonths = request.incomeHorizonMonths,
+                    profile = profileJson,
+                )
 
                 // 3. Parametros base (sem monthlyContribution). As premissas de
                 // longo prazo omitidas pelo app (null) sao preenchidas pela base
@@ -105,23 +106,35 @@ fun Route.simulationCalibratedRoutes(
                 // (User) define retorno/volatilidade; o vinculo (perfil estendido,
                 // JSONB) define a probabilidade de desemprego.
                 val riskProfile = userRepository.findById(userId)?.riskProfile
-                val employmentType = userProfileRepository.get(userId)?.employmentType()
+                val employmentType = profileJson?.employmentType()
                 val preset = ReferenceData.presetFor(riskProfile, employmentType)
                 // Choque de despesa inesperada (Proposta 6.2): frequencia vem da
-                // base; a magnitude media e uma fracao da renda mensal prevista.
+                // base; a magnitude media e uma fracao da renda mensal estimada.
+                // Sem estimativa de renda, o choque fica desligado.
+                val monthlyIncome = inputs.monthlyIncome
                 val baseParams = request.toBaseParameters(
                     preset = preset,
                     seed = request.seed ?: System.currentTimeMillis(),
-                    unexpectedExpenseAnnualFrequency = ReferenceData.unexpectedExpenseAnnualFrequency,
-                    unexpectedExpenseMeanAmount = ReferenceData.unexpectedExpenseMeanFractionOfIncome *
-                        incomeOutcome.response.expectedMonthlyIncome,
+                    unexpectedExpenseAnnualFrequency =
+                        if (monthlyIncome != null) ReferenceData.unexpectedExpenseAnnualFrequency else 0.0,
+                    unexpectedExpenseMeanAmount =
+                        ReferenceData.unexpectedExpenseMeanFractionOfIncome * (monthlyIncome ?: 0.0),
                 )
 
-                // 4. Calibracao
-                val calibration = predictionService.calibrate(
+                // 4. Calibracao (com recuo para a volatilidade de renda tipica do
+                // vinculo, da base de referencia, quando a regressao nao rodou).
+                val calibration = predictionService.calibrateWithFallback(
                     base = baseParams,
-                    income = incomeOutcome.response,
-                    expense = expenseOutcome.response,
+                    inputs = inputs,
+                    referenceIncomeVolatilityAnnual = employmentType
+                        ?.let { ReferenceData.byEmploymentType[it]?.incomeVolatilityAnnual },
+                ) ?: return@post call.respond(
+                    HttpStatusCode.UnprocessableEntity,
+                    ErrorResponse(
+                        "INSUFFICIENT_DATA",
+                        "Para simular com IA, cadastre suas receitas e despesas ou informe " +
+                            "salário e aporte mensal em Perfil > Dados para projeções.",
+                    ),
                 )
 
                 // 5. Engine Monte Carlo (CPU-bound -> Dispatchers.Default)
@@ -150,9 +163,13 @@ fun Route.simulationCalibratedRoutes(
                     put("unexpectedExpenseMeanAmount", calibration.parameters.unexpectedExpenseMeanAmount)
                     put("numSimulations", calibration.parameters.numSimulations)
                     put("seed", calibration.parameters.seed)
-                    // referencias as predicoes que originaram a calibracao
-                    put("incomePredictionId", incomeOutcome.prediction.id)
-                    put("expensePredictionId", expenseOutcome.prediction.id)
+                    // referencias as predicoes que originaram a calibracao (null
+                    // quando o respectivo modelo nao rodou e houve recuo)
+                    put("incomePredictionId", inputs.incomePrediction?.prediction?.id)
+                    put("expensePredictionId", inputs.expensePrediction?.prediction?.id)
+                    put("incomeSource", calibration.incomeSource?.name)
+                    put("expenseSource", calibration.expenseSource?.name)
+                    put("contributionSource", calibration.contributionSource.name)
                 }
 
                 val resultDto = result.toResponseDto(
@@ -182,13 +199,17 @@ fun Route.simulationCalibratedRoutes(
                             createdAt = persisted.createdAt.toString(),
                         ),
                         calibration = CalibrationSummaryResponse(
-                            incomePredictionId = incomeOutcome.prediction.id,
-                            expensePredictionId = expenseOutcome.prediction.id,
+                            incomePredictionId = inputs.incomePrediction?.prediction?.id,
+                            expensePredictionId = inputs.expensePrediction?.prediction?.id,
                             predictedMonthlyIncome = calibration.predictedMonthlyIncome,
                             predictedMonthlyExpense = calibration.predictedMonthlyExpense,
                             rawMonthlyContribution = calibration.rawContribution,
                             appliedMonthlyContribution = calibration.appliedContribution,
                             appliedVolatilityAnnual = calibration.appliedVolatilityAnnual,
+                            incomeSource = calibration.incomeSource?.name,
+                            expenseSource = calibration.expenseSource?.name,
+                            contributionSource = calibration.contributionSource.name,
+                            fallbackNotes = calibration.fallbackNotes,
                         ),
                     ),
                 )

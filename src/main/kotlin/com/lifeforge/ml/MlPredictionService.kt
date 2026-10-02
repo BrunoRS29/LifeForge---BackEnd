@@ -69,7 +69,7 @@ class MlPredictionService(
         if (history.size < MIN_INCOME_OBSERVATIONS) {
             throw MlValidationError(
                 code = "INSUFFICIENT_DATA",
-                message = "Historico de renda precisa de >= $MIN_INCOME_OBSERVATIONS registros " +
+                message = "Histórico de renda insuficiente: são necessários ao menos $MIN_INCOME_OBSERVATIONS lançamentos " +
                     "(atualmente ${history.size}).",
             )
         }
@@ -108,8 +108,8 @@ class MlPredictionService(
         if (history.size < MIN_EXPENSE_OBSERVATIONS) {
             throw MlValidationError(
                 code = "INSUFFICIENT_DATA",
-                message = "Historico de despesas precisa de >= $MIN_EXPENSE_OBSERVATIONS " +
-                    "registros (atualmente ${history.size}).",
+                message = "Histórico de despesas insuficiente: são necessários ao menos $MIN_EXPENSE_OBSERVATIONS " +
+                    "lançamentos (atualmente ${history.size}).",
             )
         }
 
@@ -158,7 +158,7 @@ class MlPredictionService(
         if (series.size < MIN_WEALTH_OBSERVATIONS) {
             throw MlValidationError(
                 code = "INSUFFICIENT_DATA",
-                message = "Historico de patrimonio precisa de >= $MIN_WEALTH_OBSERVATIONS " +
+                message = "Histórico de patrimônio insuficiente: são necessários ao menos $MIN_WEALTH_OBSERVATIONS " +
                     "meses (atualmente ${series.size}). Registre mais receitas/despesas.",
             )
         }
@@ -272,6 +272,168 @@ class MlPredictionService(
     }
 
     // ========================================================================
+    // Calibracao com recuo (partida a frio) - TCC, Secoes 4.7 e 5.2
+    // ========================================================================
+
+    /**
+     * Resolve os insumos da calibracao: tenta os dois modelos de IA e, para o
+     * que nao puder ser previsto (historico insuficiente ou microsservico
+     * indisponivel), recua para o perfil e para medias simples do historico
+     * ([ColdStartCalibration]). Erros que nao sejam do microsservico de ML
+     * (ex.: falha de banco) propagam normalmente.
+     *
+     * @param profile JSON do perfil estendido (salario e aporte declarados).
+     */
+    suspend fun resolveCalibrationInputs(
+        userId: Long,
+        incomeHorizonMonths: Int,
+        profile: JsonElement?,
+        now: Instant = Instant.now(),
+    ): CalibrationInputs {
+        val notes = mutableListOf<String>()
+
+        val incomeOutcome = attemptPrediction(notes, "renda") {
+            predictIncomeFor(userId, incomeHorizonMonths)
+        }
+        val expenseOutcome = attemptPrediction(notes, "despesas") {
+            predictExpensesFor(userId, horizonMonths = 1)
+        }
+
+        // Renda: modelo > salario declarado no perfil > media simples recente.
+        var incomeSource: ColdStartCalibration.Source? = null
+        val monthlyIncome: Double? = when {
+            incomeOutcome != null -> {
+                incomeSource = ColdStartCalibration.Source.ML_MODEL
+                incomeOutcome.response.expectedMonthlyIncome
+            }
+            else -> ColdStartCalibration.parseAmount(
+                ColdStartCalibration.profileString(profile, "monthlySalary"),
+            )?.also { incomeSource = ColdStartCalibration.Source.PROFILE }
+                ?: ColdStartCalibration.monthlyAverage(
+                    incomeRepository.findAllByUser(userId).map { it.receivedAt to it.amount },
+                    now,
+                )?.also { incomeSource = ColdStartCalibration.Source.HISTORY_AVERAGE }
+        }
+
+        // Despesa: modelo > media simples recente.
+        var expenseSource: ColdStartCalibration.Source? = null
+        val monthlyExpense: Double? = when {
+            expenseOutcome != null -> {
+                expenseSource = ColdStartCalibration.Source.ML_MODEL
+                expenseOutcome.response.expectedMonthlyExpense
+            }
+            else -> ColdStartCalibration.monthlyAverage(
+                expenseRepository.findAllByUser(userId).map { it.spentAt to it.amount },
+                now,
+            )?.also { expenseSource = ColdStartCalibration.Source.HISTORY_AVERAGE }
+        }
+
+        return CalibrationInputs(
+            incomePrediction = incomeOutcome,
+            expensePrediction = expenseOutcome,
+            monthlyIncome = monthlyIncome,
+            incomeSource = incomeSource,
+            monthlyExpense = monthlyExpense,
+            expenseSource = expenseSource,
+            declaredContribution = ColdStartCalibration.parseAmount(
+                ColdStartCalibration.profileString(profile, "monthlyContribution"),
+            ),
+            notes = notes,
+        )
+    }
+
+    /**
+     * Calibracao com recuo. Com as duas predicoes de IA disponiveis, equivale
+     * exatamente a [calibrate]. Caso contrario:
+     *
+     *  - aporte = renda estimada - despesa estimada (capado em zero) quando as
+     *    duas estimativas existem; senao, o aporte declarado no perfil;
+     *  - volatilidade = max(volatilidade de mercado, volatilidade de renda) -
+     *    a de renda vem da regressao quando ela rodou e, no recuo, da base de
+     *    referencia para o vinculo do usuario ([referenceIncomeVolatilityAnnual]).
+     *
+     * @return null quando nao ha como estimar o aporte (sem renda/despesa e sem
+     *   aporte declarado) - a rota responde 422 com orientacao ao usuario.
+     */
+    fun calibrateWithFallback(
+        base: MonteCarloParameters,
+        inputs: CalibrationInputs,
+        referenceIncomeVolatilityAnnual: Double?,
+    ): CalibrationResult? {
+        val income = inputs.incomePrediction
+        val expense = inputs.expensePrediction
+        if (income != null && expense != null) {
+            return calibrate(base, income.response, expense.response).copy(
+                incomeSource = ColdStartCalibration.Source.ML_MODEL,
+                expenseSource = ColdStartCalibration.Source.ML_MODEL,
+                contributionSource = ContributionSource.PREDICTIONS,
+            )
+        }
+
+        val derived = if (inputs.monthlyIncome != null && inputs.monthlyExpense != null) {
+            inputs.monthlyIncome - inputs.monthlyExpense
+        } else {
+            null
+        }
+        val contributionSource: ContributionSource
+        val rawContribution: Double = when {
+            derived != null -> {
+                contributionSource = ContributionSource.PREDICTIONS
+                derived
+            }
+            inputs.declaredContribution != null -> {
+                contributionSource = ContributionSource.PROFILE
+                inputs.declaredContribution
+            }
+            else -> return null
+        }
+        val appliedContribution = rawContribution.coerceAtLeast(0.0)
+
+        val incomeVolatilityAnnual = when {
+            income != null -> income.response.residualVolatilityMonthly *
+                Math.sqrt(12.0) / maxOf(income.response.expectedMonthlyIncome, 1.0)
+            else -> referenceIncomeVolatilityAnnual ?: 0.0
+        }
+        val combinedVolatility = maxOf(base.volatilityAnnual, incomeVolatilityAnnual)
+
+        return CalibrationResult(
+            parameters = base.copy(
+                monthlyContribution = appliedContribution,
+                volatilityAnnual = combinedVolatility,
+            ),
+            predictedMonthlyIncome = inputs.monthlyIncome ?: 0.0,
+            predictedMonthlyExpense = inputs.monthlyExpense ?: 0.0,
+            rawContribution = rawContribution,
+            appliedContribution = appliedContribution,
+            appliedVolatilityAnnual = combinedVolatility,
+            incomeSource = inputs.incomeSource,
+            expenseSource = inputs.expenseSource,
+            contributionSource = contributionSource,
+            fallbackNotes = inputs.notes,
+        )
+    }
+
+    /**
+     * Executa uma predicao; se falhar por motivo do microsservico de ML (dados
+     * insuficientes, indisponibilidade, erro interno), registra o motivo em
+     * [notes] e devolve null para que o chamador recue. Outros erros propagam.
+     */
+    private suspend fun <T> attemptPrediction(
+        notes: MutableList<String>,
+        label: String,
+        block: suspend () -> PredictionOutcome<T>,
+    ): PredictionOutcome<T>? = try {
+        block()
+    } catch (e: MlClientException) {
+        notes += when (e) {
+            is MlValidationError -> "Modelo de $label não aplicado: ${e.message}"
+            is MlUnavailableError -> "Modelo de $label indisponível no momento."
+            else -> "Modelo de $label falhou: ${e.message}"
+        }
+        null
+    }
+
+    // ========================================================================
     // Helpers internos
     // ========================================================================
 
@@ -349,4 +511,34 @@ data class CalibrationResult(
     val rawContribution: Double,        // pode ser negativo
     val appliedContribution: Double,    // sempre >= 0
     val appliedVolatilityAnnual: Double,
+    // Origem de cada insumo (transparencia do recuo de partida a frio).
+    val incomeSource: ColdStartCalibration.Source? = ColdStartCalibration.Source.ML_MODEL,
+    val expenseSource: ColdStartCalibration.Source? = ColdStartCalibration.Source.ML_MODEL,
+    val contributionSource: ContributionSource = ContributionSource.PREDICTIONS,
+    val fallbackNotes: List<String> = emptyList(),
+)
+
+/** De onde veio o aporte aplicado na simulacao calibrada. */
+enum class ContributionSource {
+    /** Renda estimada - despesa estimada (pelos modelos ou pelo recuo). */
+    PREDICTIONS,
+
+    /** Aporte mensal declarado pelo usuario no perfil (ultimo recurso). */
+    PROFILE,
+}
+
+/**
+ * Insumos resolvidos para a calibracao: predicoes de IA (quando foi possivel
+ * executa-las) e as estimativas finais de renda e despesa com a respectiva
+ * origem. [notes] explica, em linguagem simples, por que houve recuo.
+ */
+data class CalibrationInputs(
+    val incomePrediction: PredictionOutcome<IncomePredictionResponseDto>?,
+    val expensePrediction: PredictionOutcome<ExpensePredictionResponseDto>?,
+    val monthlyIncome: Double?,
+    val incomeSource: ColdStartCalibration.Source?,
+    val monthlyExpense: Double?,
+    val expenseSource: ColdStartCalibration.Source?,
+    val declaredContribution: Double?,
+    val notes: List<String>,
 )
