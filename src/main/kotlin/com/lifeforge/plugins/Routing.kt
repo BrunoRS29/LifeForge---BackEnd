@@ -74,6 +74,7 @@ fun Application.configureRouting(container: AppContainer) {
             expenseRepository = container.expenseRepository,
             assetRepository = container.assetRepository,
             goalRepository = container.goalRepository,
+            userProfileRepository = container.userProfileRepository,
         )
 
         // Importacao de extratos bancarios em lote (Receitas + Despesas)

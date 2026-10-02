@@ -250,11 +250,16 @@ paths:
   /api/v1/dashboard:
     get:
       tags: [Dashboard]
-      summary: Indicadores consolidados (patrimônio, renda e despesa recorrentes, metas)
+      summary: Indicadores consolidados (patrimônio, renda e despesa do mês, metas)
       description: >
-        Renda mensal = lançamentos de receita recorrentes + renda estimada dos
-        ativos (valor × retorno esperado ÷ 12); despesa mensal = lançamentos de
-        despesa recorrentes. `savingsRate` em pontos percentuais.
+        Mesmo cálculo do painel do app. Renda mensal = salário (o do perfil
+        estendido; sem ele, o inferido dos lançamentos de salário) + renda
+        estimada dos ativos (valor × retorno esperado ÷ 12). Despesa mensal =
+        cada série recorrente ativa uma vez (mesma descrição e categoria; vale o
+        lançamento mais recente; séries sem lançamento há mais de 3 meses são
+        consideradas encerradas) + média dos 3 meses mais recentes dos
+        lançamentos pontuais. Ocorrências de meses futuros não entram.
+        `savingsRate` em pontos percentuais.
       responses:
         "200":
           description: Painel
