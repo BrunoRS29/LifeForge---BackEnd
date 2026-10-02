@@ -173,6 +173,18 @@ estatísticas, hash de senha e rotas (test client do Ktor). Relatórios analíti
 - `docs/comparacao-montecarlo-deterministico.md` — Monte Carlo × determinístico
 - `docs/estatisticas-referencia.md` — base de referência e mapeamento da §6.2
 
+## Conta de demonstração
+
+`scripts/seed_demo.py` popula uma conta fictícia para apresentações e capturas de
+tela: 18 meses de receitas e despesas (histórico suficiente para os modelos de IA),
+perfil, ativos, três metas e simulações — inclusive duas estratégias para a mesma
+meta (comparação lado a lado) e uma rodada calibrada pela IA. Valores gerados com
+semente fixa; não use dados pessoais reais.
+
+```bash
+python scripts/seed_demo.py --email demo@lifeforge.test --password <senha>
+```
+
 ## Variáveis de ambiente
 
 Veja `.env.example`. Principais: `DATABASE_URL`, `DATABASE_USER`,

@@ -77,6 +77,9 @@ class Api:
 
 
 def main() -> int:
+    # Console do Windows usa cp1252 por padrao: forca UTF-8 para os acentos.
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(description="Smoke test da API do LifeForge")
     parser.add_argument("--base-url", default="http://localhost:8080")
     parser.add_argument("--bench", type=int, default=0, help="rodadas para medir a latencia de /simulation/run")
