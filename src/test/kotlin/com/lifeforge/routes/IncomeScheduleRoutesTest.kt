@@ -34,6 +34,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.SchemaUtils
+import org.jetbrains.exposed.sql.transactions.TransactionManager
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.junit.jupiter.api.Test
 
@@ -213,6 +214,9 @@ class IncomeScheduleRoutesTest {
         lateinit var ctx: TestContext
         application {
             val db = Database.connect(jdbcUrl, driver = "org.h2.Driver")
+            // Os repositorios usam o banco padrao do Exposed: aponta-o para o H2
+            // deste teste (sem isso, valia o primeiro banco conectado na JVM).
+            TransactionManager.defaultDatabase = db
             transaction(db) {
                 // Ordem importa: tabelas referenciadas antes (FK).
                 SchemaUtils.create(Users, IncomeSchedules, Incomes)

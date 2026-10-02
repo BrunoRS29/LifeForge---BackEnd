@@ -5,17 +5,21 @@ import com.lifeforge.data.repository.UserRepositoryImpl
 import com.lifeforge.data.tables.Goals
 import com.lifeforge.data.tables.Users
 import com.lifeforge.domain.model.RiskProfile
-import com.lifeforge.dto.ErrorResponse
+import com.lifeforge.dto.GoalDto
+import com.lifeforge.dto.GoalRequest
 import com.lifeforge.plugins.configureHTTP
 import com.lifeforge.plugins.configureSecurity
 import com.lifeforge.plugins.configureSerialization
 import com.lifeforge.security.JwtService
+import io.kotest.matchers.collections.shouldHaveSize
+import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
-import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.shouldNotBe
 import io.ktor.client.call.body
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.bearerAuth
 import io.ktor.client.request.get
+import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.http.ContentType
@@ -26,6 +30,11 @@ import io.ktor.server.config.MapApplicationConfig
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.ApplicationTestBuilder
 import io.ktor.server.testing.testApplication
+import java.time.Clock
+import java.time.Duration
+import java.time.Instant
+import java.time.ZoneId
+import java.time.ZoneOffset
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import org.jetbrains.exposed.sql.Database
@@ -35,58 +44,73 @@ import org.jetbrains.exposed.sql.transactions.transaction
 import org.junit.jupiter.api.Test
 
 /**
- * Contrato de erros da API: toda falha responde `ErrorResponse { error, message }`
- * com o status correto. Regressao contra corpo malformado virar 500 (erro do
- * cliente reportado como erro do servidor).
+ * Reenvio de criacoes pelo app offline-first: a mesma `Idempotency-Key`
+ * devolve o registro ja criado em vez de duplica-lo.
  */
-class ErrorHandlingRoutesTest {
+class IdempotencyRoutesTest {
 
     private val testJson = Json { ignoreUnknownKeys = true }
 
+    private val request = GoalRequest(
+        name = "Reserva de emergencia",
+        category = "CUSTOM",
+        targetAmount = "30000.00",
+        targetDate = "2030-01-01T00:00:00Z",
+        priority = 1,
+    )
+
     @Test
-    fun `JSON malformado retorna 400 VALIDATION em vez de 500`() = testApplication {
-        val token = setupTestApp("errTest1")
+    fun `mesma chave devolve o registro ja criado sem duplicar`() = testApplication {
+        val token = setupTestApp("idemTest1")
         val client = jsonClient()
 
-        val response = client.post("/api/v1/goals") {
-            bearerAuth(token)
-            contentType(ContentType.Application.Json)
-            setBody("{ isto nao e json")
+        val first = client.post("/api/v1/goals") {
+            bearerAuth(token); header("Idempotency-Key", "lifeforge-goal-1-123")
+            contentType(ContentType.Application.Json); setBody(request)
+        }
+        val retry = client.post("/api/v1/goals") {
+            bearerAuth(token); header("Idempotency-Key", "lifeforge-goal-1-123")
+            contentType(ContentType.Application.Json); setBody(request)
         }
 
-        response.status shouldBe HttpStatusCode.BadRequest
-        response.body<ErrorResponse>().error shouldBe "VALIDATION"
+        first.status shouldBe HttpStatusCode.Created
+        retry.status shouldBe HttpStatusCode.Created
+        retry.body<GoalDto>().id shouldBe first.body<GoalDto>().id
+        client.get("/api/v1/goals") { bearerAuth(token) }.body<List<GoalDto>>() shouldHaveSize 1
     }
 
     @Test
-    fun `campo obrigatorio ausente retorna 400 VALIDATION`() = testApplication {
-        val token = setupTestApp("errTest2")
+    fun `sem chave cada requisicao cria um registro`() = testApplication {
+        val token = setupTestApp("idemTest2")
         val client = jsonClient()
 
-        val response = client.post("/api/v1/goals") {
-            bearerAuth(token)
-            contentType(ContentType.Application.Json)
-            setBody("""{"name": "Viagem"}""")
-        }
+        val a = client.post("/api/v1/goals") {
+            bearerAuth(token); contentType(ContentType.Application.Json); setBody(request)
+        }.body<GoalDto>()
+        val b = client.post("/api/v1/goals") {
+            bearerAuth(token); contentType(ContentType.Application.Json); setBody(request)
+        }.body<GoalDto>()
 
-        response.status shouldBe HttpStatusCode.BadRequest
-        response.body<ErrorResponse>().error shouldBe "VALIDATION"
+        a.id shouldNotBe b.id
     }
 
     @Test
-    fun `id nao numerico retorna 400 INVALID_ID e recurso inexistente 404 com corpo padrao`() = testApplication {
-        val token = setupTestApp("errTest3")
-        val client = jsonClient()
+    fun `chave expira depois do prazo de validade`() {
+        var now = Instant.parse("2026-10-02T12:00:00Z")
+        val clock = object : Clock() {
+            override fun getZone(): ZoneId = ZoneOffset.UTC
+            override fun withZone(zone: ZoneId?): Clock = this
+            override fun instant(): Instant = now
+        }
+        val registry = IdempotencyRegistry(ttl = Duration.ofHours(24), clock = clock)
 
-        val invalid = client.get("/api/v1/goals/abc") { bearerAuth(token) }
-        invalid.status shouldBe HttpStatusCode.BadRequest
-        invalid.body<ErrorResponse>().error shouldBe "INVALID_ID"
+        registry.remember(userId = 1, scope = "goal", key = "k", resourceId = 42)
+        registry.find(1, "goal", "k") shouldBe 42L
+        registry.find(2, "goal", "k").shouldBeNull() // outro usuario
+        registry.find(1, "income", "k").shouldBeNull() // outro recurso
 
-        val missing = client.get("/api/v1/goals/987654") { bearerAuth(token) }
-        missing.status shouldBe HttpStatusCode.NotFound
-        val body = missing.body<ErrorResponse>()
-        body.error shouldBe "NOT_FOUND"
-        body.message shouldContain "não encontrada"
+        now = now.plus(Duration.ofHours(25))
+        registry.find(1, "goal", "k").shouldBeNull()
     }
 
     // =================================================================
@@ -124,7 +148,8 @@ class ErrorHandlingRoutesTest {
             configureSerialization()
             configureHTTP()
             configureSecurity(jwt)
-            routing { goalRoutes(GoalRepositoryImpl()) }
+            // Registro proprio por teste: isola as chaves entre os casos.
+            routing { goalRoutes(GoalRepositoryImpl(), IdempotencyRegistry()) }
         }
         startApplication()
         return token

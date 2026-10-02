@@ -23,12 +23,16 @@ import java.math.BigDecimal
  * pontuais), ativos sao posicoes patrimoniais que evoluem ao longo do
  * tempo, entao expomos PUT para atualizar valor/retorno/volatilidade.
  */
-fun Route.assetRoutes(repository: AssetRepository) {
+fun Route.assetRoutes(
+    repository: AssetRepository,
+    idempotency: IdempotencyRegistry = IdempotencyRegistry.shared,
+) {
     authenticate("auth-jwt") {
         route("/api/v1/assets") {
 
             get {
-                call.respond(repository.findAllByUser(call.userId()).map { it.toDto() })
+                // Paginacao opcional via ?limit=&offset= (ver ApplicationCall.paginate).
+                call.respond(call.paginate(repository.findAllByUser(call.userId()).map { it.toDto() }))
             }
 
             post {
@@ -38,6 +42,10 @@ fun Route.assetRoutes(repository: AssetRepository) {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("VALIDATION", "Dados do ativo inválidos"))
                     return@post
                 }
+                // Reenvio da mesma criacao (resposta perdida): devolve o registro ja criado.
+                idempotency.find(userId, "asset", call.idempotencyKey())
+                    ?.let { existingId -> repository.findById(existingId, userId) }
+                    ?.let { existing -> return@post call.respond(HttpStatusCode.Created, existing.toDto()) }
                 val asset = repository.create(
                     userId = userId,
                     name = parsed.name,
@@ -46,6 +54,7 @@ fun Route.assetRoutes(repository: AssetRepository) {
                     expectedReturn = parsed.expectedReturn,
                     volatility = parsed.volatility
                 )
+                idempotency.remember(userId, "asset", call.idempotencyKey(), asset.id)
                 call.respond(HttpStatusCode.Created, asset.toDto())
             }
 

@@ -37,6 +37,7 @@ import java.time.Instant
 fun Route.incomeRoutes(
     repository: IncomeRepository,
     scheduleRepository: IncomeScheduleRepository,
+    idempotency: IdempotencyRegistry = IdempotencyRegistry.shared,
 ) {
     authenticate("auth-jwt") {
         route("/api/v1/incomes") {
@@ -57,6 +58,10 @@ fun Route.incomeRoutes(
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("VALIDATION", "Dados da receita inválidos"))
                     return@post
                 }
+                // Reenvio da mesma criacao (resposta perdida): devolve o registro ja criado.
+                idempotency.find(userId, "income", call.idempotencyKey())
+                    ?.let { existingId -> repository.findById(existingId, userId) }
+                    ?.let { existing -> return@post call.respond(HttpStatusCode.Created, existing.toDto()) }
                 val income = repository.create(
                     userId = userId,
                     source = req.source.trim(),
@@ -65,6 +70,7 @@ fun Route.incomeRoutes(
                     recurring = req.recurring,
                     receivedAt = receivedAt,
                 )
+                idempotency.remember(userId, "income", call.idempotencyKey(), income.id)
                 call.respond(HttpStatusCode.Created, income.toDto())
             }
 

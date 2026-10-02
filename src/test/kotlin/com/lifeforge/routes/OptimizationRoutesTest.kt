@@ -52,6 +52,7 @@ import org.jetbrains.exposed.sql.SchemaUtils
 import org.jetbrains.exposed.sql.StdOutSqlLogger
 import org.jetbrains.exposed.sql.insertAndGetId
 import org.jetbrains.exposed.sql.addLogger
+import org.jetbrains.exposed.sql.transactions.TransactionManager
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.junit.jupiter.api.Test
 import kotlin.test.assertNotNull
@@ -440,6 +441,8 @@ class OptimizationRoutesTest {
         application {
             // (1) H2 em memoria com schema minimo
             val db = Database.connect(jdbcUrl, driver = "org.h2.Driver")
+            // Banco padrao do Exposed = H2 deste teste (isola dos demais testes HTTP).
+            TransactionManager.defaultDatabase = db
             transaction(db) {
                 exec("DROP DOMAIN IF EXISTS jsonb CASCADE;")
                 exec("CREATE DOMAIN jsonb AS JSON;")

@@ -44,6 +44,8 @@ fun Application.configureHTTP() {
         allowMethod(HttpMethod.Delete)
         allowHeader(HttpHeaders.Authorization)
         allowHeader(HttpHeaders.ContentType)
+        // Reenvio seguro de criacoes pelo app offline-first (ver IdempotencyRegistry).
+        allowHeader("Idempotency-Key")
     }
 
     // Rate limiting nomeado "auth": protege login/registro contra forca bruta.

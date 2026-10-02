@@ -30,14 +30,17 @@ import java.time.Instant
  * O isolamento por usuario e feito sempre via filtro userId no repositorio,
  * de forma que um usuario nunca consegue acessar metas de outro.
  */
-fun Route.goalRoutes(repository: GoalRepository) {
+fun Route.goalRoutes(
+    repository: GoalRepository,
+    idempotency: IdempotencyRegistry = IdempotencyRegistry.shared,
+) {
     authenticate("auth-jwt") {
         route("/api/v1/goals") {
 
             get {
                 val userId = call.userId()
-                val goals = repository.findAllByUser(userId).map { it.toDto() }
-                call.respond(goals)
+                // Paginacao opcional via ?limit=&offset= (ver ApplicationCall.paginate).
+                call.respond(call.paginate(repository.findAllByUser(userId).map { it.toDto() }))
             }
 
             post {
@@ -50,6 +53,10 @@ fun Route.goalRoutes(repository: GoalRepository) {
                     )
                     return@post
                 }
+                // Reenvio da mesma criacao (resposta perdida): devolve o registro ja criado.
+                idempotency.find(userId, "goal", call.idempotencyKey())
+                    ?.let { existingId -> repository.findById(existingId, userId) }
+                    ?.let { existing -> return@post call.respond(HttpStatusCode.Created, existing.toDto()) }
                 val goal = repository.create(
                     userId = userId,
                     name = parsed.name,
@@ -58,6 +65,7 @@ fun Route.goalRoutes(repository: GoalRepository) {
                     targetDate = parsed.targetDate,
                     priority = parsed.priority
                 )
+                idempotency.remember(userId, "goal", call.idempotencyKey(), goal.id)
                 call.respond(HttpStatusCode.Created, goal.toDto())
             }
 

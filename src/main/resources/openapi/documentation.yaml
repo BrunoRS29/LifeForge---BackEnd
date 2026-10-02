@@ -281,6 +281,8 @@ paths:
     post:
       tags: [Goals]
       summary: Cria uma meta
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -349,6 +351,8 @@ paths:
     post:
       tags: [Finance]
       summary: Cria uma receita avulsa (para recorrência, use /schedules)
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -486,6 +490,8 @@ paths:
     post:
       tags: [Finance]
       summary: Cria uma despesa avulsa (para recorrência, use /schedules)
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -618,6 +624,8 @@ paths:
     post:
       tags: [Finance]
       summary: Cria um ativo
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -958,6 +966,15 @@ components:
       in: query
       required: false
       schema: { type: integer, minimum: 0, default: 0 }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description: >
+        Chave estável por criação, enviada pelo app offline-first. Repetir a
+        mesma chave (ex.: reenvio após resposta perdida) devolve o registro já
+        criado em vez de duplicá-lo. Válida por 24 h, por usuário e recurso.
+      schema: { type: string, maxLength: 200, example: lifeforge-goal-12-1759406400000 }
     Affect:
       name: affect
       in: query

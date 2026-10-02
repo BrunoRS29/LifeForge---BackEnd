@@ -35,6 +35,7 @@ import java.time.Instant
 fun Route.expenseRoutes(
     repository: ExpenseRepository,
     scheduleRepository: ExpenseScheduleRepository,
+    idempotency: IdempotencyRegistry = IdempotencyRegistry.shared,
 ) {
     authenticate("auth-jwt") {
         route("/api/v1/expenses") {
@@ -55,6 +56,10 @@ fun Route.expenseRoutes(
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("VALIDATION", "Dados da despesa inválidos"))
                     return@post
                 }
+                // Reenvio da mesma criacao (resposta perdida): devolve o registro ja criado.
+                idempotency.find(userId, "expense", call.idempotencyKey())
+                    ?.let { existingId -> repository.findById(existingId, userId) }
+                    ?.let { existing -> return@post call.respond(HttpStatusCode.Created, existing.toDto()) }
                 val expense = repository.create(
                     userId = userId,
                     description = req.description.trim(),
@@ -63,6 +68,7 @@ fun Route.expenseRoutes(
                     recurring = req.recurring,
                     spentAt = spentAt,
                 )
+                idempotency.remember(userId, "expense", call.idempotencyKey(), expense.id)
                 call.respond(HttpStatusCode.Created, expense.toDto())
             }
 
