@@ -129,11 +129,11 @@ def main() -> int:
     goals = {}
     for key, body in {
         "retirement": {"name": "Aposentadoria tranquila", "category": "RETIREMENT", "targetAmount": "2500000.00",
-                       "targetDate": "2054-01-01T00:00:00Z", "priority": 1},
+                       "targetDate": "2054-01-01T15:00:00Z", "priority": 1},
         "apartment": {"name": "Entrada do apartamento", "category": "REAL_ESTATE", "targetAmount": "150000.00",
-                      "targetDate": "2030-06-01T00:00:00Z", "priority": 2},
+                      "targetDate": "2030-06-01T15:00:00Z", "priority": 2},
         "travel": {"name": "Viagem ao Japão", "category": "TRAVEL", "targetAmount": "35000.00",
-                   "targetDate": "2027-10-01T00:00:00Z", "priority": 3},
+                   "targetDate": "2027-10-01T15:00:00Z", "priority": 3},
     }.items():
         status, goal = call(base, "POST", f"{v1}/goals", body, token)
         goals[key] = goal["id"]
