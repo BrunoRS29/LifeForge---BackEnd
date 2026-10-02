@@ -64,6 +64,12 @@ renda mensal prevista`. É ligado automaticamente na rota calibrada
 | Empresário | 15% | 20% |
 | Desconhecido (default) | 10% | — |
 
+A volatilidade de renda é relativa e anual. Na simulação calibrada sem a regressão
+de renda (partida a frio), ela vira um desvio em R$ sobre a renda estimada
+(`σ_renda = vol / √12 × renda`) e, daí, a variação relativa do **aporte**
+(`σ_renda / aporte`, limitada a 100% ao mês — `ml/IncomeUncertainty`). Não entra
+na volatilidade da carteira, que segue o perfil de risco.
+
 ### Choques e demografia
 | Item | Valor |
 |---|---|
