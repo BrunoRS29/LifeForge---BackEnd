@@ -206,8 +206,11 @@ class CalibrationFallbackTest : StringSpec({
         cal.contributionSource shouldBe ContributionSource.PREDICTIONS
         cal.appliedContribution shouldBe ((6000.0 - inputs.monthlyExpense!!) plusOrMinus 1e-9)
         cal.parameters.monthlyContribution shouldBe cal.appliedContribution
-        // Volatilidade de renda do vinculo (5%) supera a de mercado (3%).
-        cal.appliedVolatilityAnnual shouldBe (0.05 plusOrMinus 1e-12)
+        // A carteira mantem a volatilidade de mercado (3%); a volatilidade de renda
+        // tipica do vinculo (5% a.a. sobre R$ 6.000) vira variacao do aporte.
+        cal.appliedVolatilityAnnual shouldBe 0.03
+        val incomeStd = 0.05 / kotlin.math.sqrt(12.0) * 6000.0
+        cal.contributionVariationMonthly shouldBe ((incomeStd / cal.appliedContribution) plusOrMinus 1e-9)
         cal.fallbackNotes.shouldNotBeEmpty()
     }
 
@@ -232,8 +235,9 @@ class CalibrationFallbackTest : StringSpec({
 
         cal.contributionSource shouldBe ContributionSource.PROFILE
         cal.appliedContribution shouldBe 1500.0
-        // Sem vinculo conhecido, a volatilidade de mercado e mantida.
+        // Sem vinculo conhecido, a volatilidade de mercado e mantida e o aporte nao varia.
         cal.appliedVolatilityAnnual shouldBe 0.03
+        cal.contributionVariationMonthly shouldBe 0.0
     }
 
     "sem nenhum dado, nao ha como calibrar (rota responde 422)" {
@@ -268,7 +272,8 @@ class CalibrationFallbackTest : StringSpec({
         val pure = svc.calibrate(base, inputs.incomePrediction!!.response, inputs.expensePrediction!!.response)
 
         cal.appliedContribution shouldBe pure.appliedContribution
-        cal.appliedVolatilityAnnual shouldBe pure.appliedVolatilityAnnual // ignora a referencia
+        cal.appliedVolatilityAnnual shouldBe pure.appliedVolatilityAnnual
+        cal.contributionVariationMonthly shouldBe pure.contributionVariationMonthly // ignora a referencia
         cal.incomeSource shouldBe ColdStartCalibration.Source.ML_MODEL
         cal.expenseSource shouldBe ColdStartCalibration.Source.ML_MODEL
     }

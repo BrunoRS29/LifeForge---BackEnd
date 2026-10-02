@@ -139,15 +139,19 @@ defaults. Detalhes e fontes em `docs/estatisticas-referencia.md`.
 
 `ml/MlPredictionService` consome o microsserviço Python (`ml-service`) para projetar
 renda (regressão), gastos (Random Forest) e patrimônio (ARIMA), e **calibra** os
-parâmetros do Monte Carlo a partir das predições (rota `run-calibrated`). Métricas de
-erro (MAE/RMSE/R²) são propagadas para transparência.
+parâmetros do Monte Carlo a partir das predições (rota `run-calibrated`): o aporte é a
+renda menos a despesa previstas, e a incerteza da renda (desvio dos resíduos da
+regressão, em R$) faz o **aporte** variar mês a mês — `σ_aporte = σ_renda / aporte`,
+limitado a 100% (`ml/IncomeUncertainty`). A volatilidade da carteira continua a de
+mercado do perfil de risco: a oscilação da renda não incide sobre todo o patrimônio.
+Métricas de erro (MAE/RMSE/R²) são propagadas para transparência.
 
 **Partida a frio:** com histórico insuficiente para os modelos (6 receitas / 12
 despesas) ou com o microsserviço fora do ar, a simulação calibrada recua para o
 salário e o aporte declarados no perfil e para médias simples dos últimos 12 meses,
-e toma da base de referência a volatilidade de renda do vínculo
-(`ml/ColdStartCalibration`). A resposta informa a origem de cada insumo e os motivos
-do recuo.
+e toma da base de referência a volatilidade de renda do vínculo, que passa a
+variar o aporte (`ml/ColdStartCalibration`). A resposta informa a origem de cada
+insumo e os motivos do recuo.
 
 ## Testes e cobertura
 

@@ -11,7 +11,6 @@ import com.lifeforge.domain.repository.PredictionRepository
 import com.lifeforge.engine.montecarlo.MonteCarloParameters
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
-import io.kotest.matchers.comparables.shouldBeGreaterThanOrEqualTo
 import io.kotest.matchers.doubles.plusOrMinus
 import io.kotest.matchers.shouldBe
 import io.ktor.client.engine.mock.MockEngine
@@ -346,7 +345,7 @@ class MlPredictionServiceTest : StringSpec({
         }
     }
 
-    "calibrate: volatilidade pega o maior entre mercado e renda anualizada" {
+    "calibrate: incerteza da renda vira variacao do aporte; carteira mantem a volatilidade de mercado" {
         val client = mockClient { _ -> respond("{}", HttpStatusCode.OK) }
         val service = MlPredictionService(
             client, FakeIncomeRepo(emptyList()),
@@ -358,8 +357,9 @@ class MlPredictionServiceTest : StringSpec({
                 expectedReturnAnnual = 0.08, volatilityAnnual = 0.05, // baixa
                 horizonMonths = 12, targetAmount = 1000.0,
             )
-            // Renda com volatilidade alta:
-            // sigma_anual = 500 * sqrt(12) / 5000 = 500 * 3.464 / 5000 ~ 0.346
+            // Residuo da renda de R$ 500/mes sobre um aporte de 5000 - 1500 = 3500:
+            // o aporte varia 500 / 3500 ~ 14,3% ao mes (antes isso virava 34,6% a.a.
+            // de volatilidade da carteira inteira).
             val income = IncomePredictionResponseDto(
                 "INCOME_REGRESSION", 12, emptyList(),
                 expectedMonthlyIncome = 5000.0,
@@ -373,9 +373,10 @@ class MlPredictionServiceTest : StringSpec({
                 metrics = ModelMetricsDto(0.0, 0.0, 0.0, 1, 1),
             )
             val cal = service.calibrate(base, income, expense)
-            cal.appliedVolatilityAnnual shouldBe (0.346 plusOrMinus 0.01)
-            // Confirma que pegou a maior, nao o base 0.05
-            cal.appliedVolatilityAnnual shouldBeGreaterThanOrEqualTo base.volatilityAnnual
+            cal.appliedVolatilityAnnual shouldBe base.volatilityAnnual
+            cal.parameters.volatilityAnnual shouldBe base.volatilityAnnual
+            cal.contributionVariationMonthly shouldBe ((500.0 / 3500.0) plusOrMinus 1e-9)
+            cal.parameters.incomeVolatilityMonthly shouldBe ((500.0 / 3500.0) plusOrMinus 1e-9)
         }
     }
 })

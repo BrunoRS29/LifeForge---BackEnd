@@ -1438,7 +1438,8 @@ components:
         predictedMonthlyExpense: { type: number, format: double }
         rawMonthlyContribution: { type: number, format: double, description: "Renda − despesa (pode ser negativo)" }
         appliedMonthlyContribution: { type: number, format: double, description: Capado em zero }
-        appliedVolatilityAnnual: { type: number, format: double }
+        appliedVolatilityAnnual: { type: number, format: double, description: "Volatilidade anual da carteira (mercado, pelo perfil de risco)" }
+        contributionVariationMonthly: { type: number, format: double, description: "Desvio mensal relativo do aporte pela incerteza da renda (0.25 = ±25%), limitado a 1" }
         incomeSource: { type: string, nullable: true, enum: [ML_MODEL, PROFILE, HISTORY_AVERAGE] }
         expenseSource: { type: string, nullable: true, enum: [ML_MODEL, PROFILE, HISTORY_AVERAGE] }
         contributionSource: { type: string, enum: [PREDICTIONS, PROFILE] }

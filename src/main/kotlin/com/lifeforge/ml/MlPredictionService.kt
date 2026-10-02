@@ -231,13 +231,15 @@ class MlPredictionService(
      *      Capado em zero (nao faz sentido aporte negativo - se gasta mais do
      *      que ganha, a margem de aporte e zero, nao negativa).
      *
-     *  - volatilityAnnual    = max(volatilityAnnualBase, sigma_renda_anualizada)
-     *      Onde sigma_renda_anualizada = residual_volatility_monthly * sqrt(12).
-     *      Permite que a incerteza da renda apareca no patrimonio terminal,
-     *      mesmo que o usuario tenha colocado volatilidade baixa nos ativos.
+     *  - incomeVolatilityAnnual = variacao relativa do APORTE derivada da
+     *      incerteza da renda: (residual_volatility_monthly / aporte) * sqrt(12),
+     *      limitada a 100% ao mes (ver [IncomeUncertainty]). O motor a aplica ao
+     *      aporte de cada mes ("variacao de renda", Proposta 6.2).
      *
-     *  - expectedReturnAnnual e demais parametros permanecem como vieram do
-     *    request original (sao caracteristicas do mercado, nao do usuario).
+     *  - volatilityAnnual (da carteira), expectedReturnAnnual e demais
+     *    parametros permanecem como vieram do request/base de referencia: sao
+     *    caracteristicas do mercado, nao do usuario. A incerteza da renda nao
+     *    entra na volatilidade do retorno, que incide sobre todo o patrimonio.
      *
      * Importante para a justificativa academica: documentar essa formula no
      * Capitulo 4 do TCC mostra exatamente o que significa "input calibrado
@@ -252,13 +254,14 @@ class MlPredictionService(
         val rawContribution = income.expectedMonthlyIncome - expense.expectedMonthlyExpense
         val calibratedContribution = rawContribution.coerceAtLeast(0.0)
 
-        val incomeVolatilityAnnual = income.residualVolatilityMonthly *
-            Math.sqrt(12.0) / maxOf(income.expectedMonthlyIncome, 1.0)
-        val combinedVolatility = maxOf(base.volatilityAnnual, incomeVolatilityAnnual)
+        val contributionVariationAnnual = IncomeUncertainty.contributionVariationAnnual(
+            incomeStdMonthly = income.residualVolatilityMonthly,
+            contribution = calibratedContribution,
+        )
 
         val calibrated = base.copy(
             monthlyContribution = calibratedContribution,
-            volatilityAnnual = combinedVolatility,
+            incomeVolatilityAnnual = maxOf(base.incomeVolatilityAnnual, contributionVariationAnnual),
         )
 
         return CalibrationResult(
@@ -267,7 +270,8 @@ class MlPredictionService(
             predictedMonthlyExpense = expense.expectedMonthlyExpense,
             rawContribution = rawContribution,
             appliedContribution = calibratedContribution,
-            appliedVolatilityAnnual = combinedVolatility,
+            appliedVolatilityAnnual = calibrated.volatilityAnnual,
+            contributionVariationMonthly = calibrated.incomeVolatilityMonthly,
         )
     }
 
@@ -348,9 +352,10 @@ class MlPredictionService(
      *
      *  - aporte = renda estimada - despesa estimada (capado em zero) quando as
      *    duas estimativas existem; senao, o aporte declarado no perfil;
-     *  - volatilidade = max(volatilidade de mercado, volatilidade de renda) -
-     *    a de renda vem da regressao quando ela rodou e, no recuo, da base de
-     *    referencia para o vinculo do usuario ([referenceIncomeVolatilityAnnual]).
+     *  - variacao do aporte = incerteza da renda / aporte ([IncomeUncertainty]) -
+     *    a incerteza vem da regressao quando ela rodou e, no recuo, da
+     *    volatilidade de renda tipica do vinculo ([referenceIncomeVolatilityAnnual],
+     *    relativa) aplicada a renda estimada. A volatilidade da carteira nao muda.
      *
      * @return null quando nao ha como estimar o aporte (sem renda/despesa e sem
      *   aporte declarado) - a rota responde 422 com orientacao ao usuario.
@@ -389,23 +394,28 @@ class MlPredictionService(
         }
         val appliedContribution = rawContribution.coerceAtLeast(0.0)
 
-        val incomeVolatilityAnnual = when {
-            income != null -> income.response.residualVolatilityMonthly *
-                Math.sqrt(12.0) / maxOf(income.response.expectedMonthlyIncome, 1.0)
-            else -> referenceIncomeVolatilityAnnual ?: 0.0
+        val incomeStdMonthly = when {
+            income != null -> income.response.residualVolatilityMonthly
+            referenceIncomeVolatilityAnnual != null && inputs.monthlyIncome != null ->
+                IncomeUncertainty.incomeStdFromRelativeAnnual(referenceIncomeVolatilityAnnual, inputs.monthlyIncome)
+            else -> 0.0
         }
-        val combinedVolatility = maxOf(base.volatilityAnnual, incomeVolatilityAnnual)
+        val parameters = base.copy(
+            monthlyContribution = appliedContribution,
+            incomeVolatilityAnnual = maxOf(
+                base.incomeVolatilityAnnual,
+                IncomeUncertainty.contributionVariationAnnual(incomeStdMonthly, appliedContribution),
+            ),
+        )
 
         return CalibrationResult(
-            parameters = base.copy(
-                monthlyContribution = appliedContribution,
-                volatilityAnnual = combinedVolatility,
-            ),
+            parameters = parameters,
             predictedMonthlyIncome = inputs.monthlyIncome ?: 0.0,
             predictedMonthlyExpense = inputs.monthlyExpense ?: 0.0,
             rawContribution = rawContribution,
             appliedContribution = appliedContribution,
-            appliedVolatilityAnnual = combinedVolatility,
+            appliedVolatilityAnnual = parameters.volatilityAnnual,
+            contributionVariationMonthly = parameters.incomeVolatilityMonthly,
             incomeSource = inputs.incomeSource,
             expenseSource = inputs.expenseSource,
             contributionSource = contributionSource,
@@ -510,7 +520,9 @@ data class CalibrationResult(
     val predictedMonthlyExpense: Double,
     val rawContribution: Double,        // pode ser negativo
     val appliedContribution: Double,    // sempre >= 0
-    val appliedVolatilityAnnual: Double,
+    val appliedVolatilityAnnual: Double, // da carteira (mercado)
+    // Desvio mensal relativo do aporte pela incerteza da renda ([IncomeUncertainty]).
+    val contributionVariationMonthly: Double = 0.0,
     // Origem de cada insumo (transparencia do recuo de partida a frio).
     val incomeSource: ColdStartCalibration.Source? = ColdStartCalibration.Source.ML_MODEL,
     val expenseSource: ColdStartCalibration.Source? = ColdStartCalibration.Source.ML_MODEL,

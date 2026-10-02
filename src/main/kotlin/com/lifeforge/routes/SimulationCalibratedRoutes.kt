@@ -121,8 +121,9 @@ fun Route.simulationCalibratedRoutes(
                         ReferenceData.unexpectedExpenseMeanFractionOfIncome * (monthlyIncome ?: 0.0),
                 )
 
-                // 4. Calibracao (com recuo para a volatilidade de renda tipica do
-                // vinculo, da base de referencia, quando a regressao nao rodou).
+                // 4. Calibracao: aporte = renda - despesa previstas; a incerteza da
+                // renda vira variacao do aporte (recuo: volatilidade de renda tipica
+                // do vinculo, da base de referencia, quando a regressao nao rodou).
                 val calibration = predictionService.calibrateWithFallback(
                     base = baseParams,
                     inputs = inputs,
@@ -206,6 +207,7 @@ fun Route.simulationCalibratedRoutes(
                             rawMonthlyContribution = calibration.rawContribution,
                             appliedMonthlyContribution = calibration.appliedContribution,
                             appliedVolatilityAnnual = calibration.appliedVolatilityAnnual,
+                            contributionVariationMonthly = calibration.contributionVariationMonthly,
                             incomeSource = calibration.incomeSource?.name,
                             expenseSource = calibration.expenseSource?.name,
                             contributionSource = calibration.contributionSource.name,
